@@ -1,0 +1,86 @@
+codemeta_term,codemeta_namespace,wikidata_property,wikidata_label,wikidata_datatype,role_in_wikidata,on_wikiproject_page,mapping_type,chublets_planned_label,chublets_planned_datatype,notes
+name,schema,(label),item label,monolingual text,label,no,direct,label,monolingual text,"The current name is carried as the item label, one per language, and drives search and autocomplete."
+name,schema,P2561,name,monolingual text,statement,no,direct,name,monolingual text,"Complements the label: as a statement it can take qualifiers, references and ranks, so former names, release names and alternative spellings can be dated with P580/P582 and sourced. Not listed on the WikiProject Informatics page, but needed for renamed tools."
+description,schema,(description),item description,monolingual text,description,no,direct,description,monolingual text,"Short abstract; chublets would keep the longer README-style text in a separate statement."
+identifier,schema,(item id),Q-identifier,item,identity,no,direct,item id,item,"The chublets Q-ID would be the local identifier; the Wikidata Q-ID would be carried as an explicit link (see sameAs)."
+sameAs,schema,(sitelink),-,item,identity,no,domain-extension,wikidata item,external identifier,"Planned outbound link to Wikidata so that chublets records point at Wikidata rather than duplicating it."
+codeRepository,schema,P1324,source code repository URL,URL,statement,yes,direct,source code repository URL,URL,"Primary discovery anchor; P1552 mirror storage available as qualifier for mirrors."
+programmingLanguage,schema,P277,programmed in,item,statement,yes,direct,programmed in,item,"Item-valued in Wikidata; chublets would reuse a controlled vocabulary of language items."
+runtimePlatform,schema,P400,platform,item,statement,yes,direct,platform,item,
+operatingSystem,schema,P306,operating system,item,statement,yes,direct,operating system,item,
+softwareRequirements,schema,P1547,depends on software,item,statement,yes,direct,depends on software,item,"Dependency graph; would allow SPARQL traversal across chublets items."
+softwareVersion,schema,P348,software version identifier,string,statement,yes,direct,software version identifier,string,"Versions modelled as string statements with qualifiers, not as separate items. Latest version gets preferred rank."
+version,schema,P348,software version identifier,string,statement,yes,direct,software version identifier,string,"Duplicate of softwareVersion in CodeMeta; would collapse onto one chublets property."
+downloadUrl,schema,P4945,download URL,URL,qualifier of P348,yes,qualifier,download URL,URL,"Qualifier on the version statement in Wikidata; chublets would keep the same qualifier pattern."
+datePublished,schema,P577,publication date,point in time,statement + qualifier of P348,yes,direct,publication date,point in time,"Used both at item level and per version."
+dateCreated,schema,P571,inception,point in time,statement,yes,direct,inception,point in time,"Only when the actual creation date is known; otherwise P577."
+dateModified,schema,-,-,-,-,no,none,last update,point in time,"No property on the WikiProject page; P5017 exists in Wikidata but is out of scope here."
+license,schema,P275,copyright license,item,statement,yes,direct,copyright license,item,"SPDX identifiers would be modelled as items, as in Wikidata."
+author,schema,P170,creator,item,statement,yes,approximate,creator,item,"CodeMeta author maps to P170 on this page; Wikidata also uses P50 for publications."
+developer,codemeta,P178,developer,item,statement,yes,direct,developer,item,"Organisation or person; P31 available as contextualised qualifier for divergent business models."
+contributor,schema,-,-,-,-,no,none,contributor,item,"P767 exists in Wikidata but is not listed on the WikiProject page."
+maintainer,codemeta,-,-,-,-,no,none,maintainer,item,"P126 exists in Wikidata but is not listed on the WikiProject page; relevant for FAIR4RS sustainability signals."
+copyrightHolder,schema,-,-,-,-,no,none,copyright holder,item,"P3931 exists in Wikidata but is not listed on the WikiProject page."
+copyrightYear,schema,P571,inception,point in time,statement,yes,approximate,-,-,"No dedicated property; would be inferred from inception or publication date."
+publisher,schema,-,-,-,-,no,none,publisher,item,"Not on the WikiProject page."
+funder,schema,-,-,-,-,no,none,funder,item,"Not on the WikiProject page; would matter for NFDI and third-party-funded cultural heritage software."
+funding,schema,-,-,-,-,no,none,grant,string,"Grant number; no counterpart on the WikiProject page."
+keywords,schema,-,-,-,-,no,none,keyword,item,"P921 main subject exists in Wikidata but is not on the page; chublets would use a domain vocabulary instead of free text."
+applicationCategory,schema,P31,instance of,item,statement,yes,approximate,instance of,item,"Category expressed through class items rather than a string."
+applicationSubCategory,schema,-,-,-,-,no,approximate,subclass of,item,"P279 not listed on the page; would be used for the chublets class hierarchy."
+url,schema,P856,official website,URL,statement,yes,direct,official website,URL,
+relatedLink,schema,P973,described at URL,URL,qualifier,yes,approximate,described at URL,URL,"On the page only as a qualifier of P2992; chublets would allow it as a standalone statement."
+issueTracker,codemeta,P1401,issue tracker URL,URL,statement,yes,direct,issue tracker URL,URL,
+contIntegration,codemeta,P2992,software quality assurance,item,statement,yes,direct,software quality assurance,item,"With qualifiers P1065 (archive URL) and P973 (described at URL)."
+buildInstructions,codemeta,-,-,-,-,no,none,build instructions URL,URL,"No counterpart; relevant for reusability of small research scripts."
+readme,codemeta,P2078,user manual URL,URL,statement,yes,approximate,readme URL,URL,"P2078 is the closest fit but semantically broader."
+softwareHelp,schema,P2078,user manual URL,URL,statement,yes,direct,user manual URL,URL,
+developmentStatus,codemeta,P31,instance of,item,statement,yes,approximate,development status,item,"Wikidata models abandonment as P31 -> abandonware (Q281039) with P580/P582/P585; chublets would need a finer scale (concept, prototype, maintained, archived)."
+embargoDate,codemeta,-,-,-,-,no,none,-,-,"Out of scope for a public marketplace."
+referencePublication,codemeta,-,-,-,-,no,none,reference publication,item,"P1343 and P2860 exist in Wikidata but are not on the page; essential for software citation in the cultural heritage domain."
+citation,schema,-,-,-,-,no,none,cites work,item,"Not on the WikiProject page."
+isPartOf,schema,P361,part of,item,statement,yes,direct,part of,item,"Also used for APIs: an API is P361 of the software implementing it."
+hasPart,schema,P527,has part(s),item,statement,yes,direct,has part(s),item,"Wikidata example already links software to a data set, which suits research software bundles."
+supportingData,codemeta,P527,has part(s),item,statement,yes,approximate,supporting data,item,"Would be split off from hasPart so that data dependencies stay queryable."
+fileFormat,schema,P1163,media type,string,statement,yes,direct,media type,string,"IANA media type as a string."
+readableFileFormat,wikidata,P1072,readable file format,item,statement,yes,direct,readable file format,item,"No CodeMeta counterpart; valuable for cultural heritage formats such as LIDO or CIDOC CRM serialisations."
+writableFileFormat,wikidata,P1073,writable file format,item,statement,yes,direct,writable file format,item,"No CodeMeta counterpart."
+targetProduct,schema,-,-,-,-,no,none,-,-,
+memoryRequirements,schema,-,-,-,-,no,none,-,-,"Out of scope for the planned model."
+processorRequirements,schema,-,-,-,-,no,none,-,-,"Out of scope for the planned model."
+storageRequirements,schema,-,-,-,-,no,none,-,-,"Out of scope for the planned model."
+permissions,schema,-,-,-,-,no,none,-,-,
+isAccessibleForFree,schema,P2284,price,quantity,statement,yes,approximate,-,-,"Wikidata expresses cost as a price quantity rather than a boolean."
+installUrl,schema,-,-,-,-,no,none,-,-,
+releaseNotes,schema,-,-,-,-,no,none,release notes URL,URL,"No counterpart on the page."
+softwareSuggestions,schema,-,-,-,-,no,none,-,-,
+doi,codemeta,P356,DOI,external identifier,qualifier of P348,yes,qualifier,DOI,external identifier,"Wikidata carries the DOI only as a version qualifier, while CodeMeta and CFF treat it as a first-class field; chublets would promote it to a statement and keep the qualifier form for per-version DOIs."
+-,-,P6830,swMATH work ID,external identifier,statement,yes,domain-extension,open-archaeo ID,external identifier,"swMATH is the structural precedent: a domain registry identifier as an external-ID property. The planned open-archaeo identifier would follow the same pattern."
+-,-,P2037,GitHub account,external identifier,statement,yes,direct,GitHub account,external identifier,"Ingestion hook for harvesting CFF and CodeMeta files from repositories."
+-,-,P1972,Open Hub ID,external identifier,statement,yes,direct,Open Hub ID,external identifier,
+-,-,P2209,SourceForge project,external identifier,statement,yes,direct,SourceForge project,external identifier,
+-,-,P2537,Free Software Directory entry,external identifier,statement,yes,direct,Free Software Directory entry,external identifier,
+-,-,P155,follows,item,statement,yes,direct,follows,item,"Successor chains; would document the lineage of small tools."
+-,-,P156,followed by,item,statement,yes,direct,followed by,item,
+-,-,P144,based on,item,statement,yes,direct,based on,item,"With P756 as a qualifier for removed features."
+-,-,P1372,binding of software library,item,statement,yes,direct,binding of software library,item,
+-,-,P1414,GUI toolkit or framework,item,statement,yes,direct,GUI toolkit or framework,item,
+-,-,P408,software engine,item,statement,yes,direct,software engine,item,
+-,-,P3033,package management system,item,statement,yes,direct,package management system,item,
+-,-,P437,distribution format,item,statement,yes,direct,distribution format,item,
+-,-,P2159,computes solution to,item,statement,yes,domain-extension,addresses research question,item,"Wikidata frames this algorithmically; chublets would reframe it towards research questions in cultural heritage."
+-,-,P813,retrieved,point in time,reference,yes,direct,retrieved,point in time,"Reference-level provenance; would let a harvesting bot record when a repository URL was last verified."
+-,-,P1552,has characteristic,item,qualifier,yes,direct,has characteristic,item,"Used with mirror storage (Q654822) on P1324 and P856."
+-,-,-,-,-,-,no,domain-extension,heritage domain,item,"Planned domain facet from the Hungry Squirrels Ontology (for example archaeology, conservation, museum documentation)."
+-,-,-,-,-,-,no,domain-extension,minion type,item,"Planned classification of the software nugget (script, notebook, converter, ontology tool)."
+-,-,-,-,-,-,no,domain-extension,standard supported,item,"Planned link to domain standards such as CIDOC CRM or LIDO, which CodeMeta leaves generic."
+-,-,-,-,-,-,no,domain-extension,FDO identifier,external identifier,"Planned link to the FDOx record, so that a chublets item can be resolved as a FAIR Digital Object."
+-,-,P8423,version control system,item,qualifier of P1324,no,direct,version control system,item,"Required qualifier on P1324. Derivable from the forge host: Git for GitHub, GitLab, Codeberg and Gist; Bazaar for Launchpad; Bitbucket ambiguous."
+-,-,P2960,archive date,point in time,qualifier of P1324,no,direct,archive date,point in time,"Pairs with P1065. The Internet Archive snapshot path embeds its own timestamp, so both come from one source value."
+-,-,P10627,web interface software,item,qualifier of P1324,no,direct,web interface software,item,"Names the forge itself on the repository statement."
+-,-,P3447,mirrors data from,item,qualifier of P1324,no,direct,mirrors data from,item,"For entries carrying both a GitHub and a Codeberg URL."
+downloadUrl,schema,P5565,CRAN project,external identifier,statement,no,domain-extension,CRAN project,external identifier,"Registry identifier rather than a link. The package name sits in the CRAN URL and is regex-extractable."
+downloadUrl,schema,P5568,PyPI project,external identifier,statement,no,domain-extension,PyPI project,external identifier,"Same principle as P5565."
+identifier,schema,P6138,Software Heritage identifier (SWHID),external identifier,statement,no,direct,SWHID,external identifier,"Archival identifier for the source code; the target property for the Software Heritage column open-archaeo plans to add."
+referencePublication,codemeta,P1343,described by source,item,statement,no,approximate,reference publication,item,"Item-valued, so the paper becomes citable. Preferable to recording the publication as a bare URL."
+author,schema,P1545,series ordinal,string,qualifier of P178,no,qualifier,series ordinal,string,"Preserves author order, which is meaningful in the source and lost by a plain multi-value statement."
