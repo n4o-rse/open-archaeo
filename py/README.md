@@ -79,8 +79,8 @@ python py/wikidata/main.py preview    # docs/preview.html: the mapping, item by 
 python py/wikidata/main.py --list     # the seven steps
 ```
 
-Seven steps -- `check`, `preview`, `reconcile`, `vocab`, `push`, `sparql`,
-`site` -- producing a concordance of what is already in Wikidata, a registry of
+Eight steps -- `check`, `preview`, `reconcile`, `vocab`, `subjects`, `push`,
+`sparql`, `site` -- producing a concordance of what is already in Wikidata, a registry of
 the controlled values, the writes themselves, and the pages in `docs/`. Only
 `push --live` writes anything to Wikidata, and it needs that flag explicitly.
 
@@ -158,7 +158,7 @@ Everything the source contains is in the file, and that has been verified. But
 |---|---|
 | `category` | Maps to a second `P31` value, but the target class is a choice. The three categories are seeded in `vocabulary.json` as `item_class`, each `null` until someone decides; an unresolved one shows as a **blocked** issue on the preview rather than as a quietly thinner item. |
 | `platform` | Conflates three things, which is why `platform_role` exists. `language` (301 entries) maps to `P277` programmed in; `host application` (34) to `P1547` depends on software; `deployment` (8, `Mobile app` and `Web app`) is not a platform statement at all but a refinement of `P31`. Each target still needs its own item. |
-| `tags` | Maps to `P921` main subject, but the 56 vocabulary terms have to be reconciled against Wikidata items one by one. |
+| `tags` | Maps to `P921` main subject, but the 56 terms have to be reconciled one by one. `python py/wikidata/main.py subjects` writes a worksheet for that, carrying each term's scope note from `tags.md` -- and marks the six that are not subjects at all. |
 | `authors` | 502 mentions, 283 distinct; 221 look like forge usernames rather than personal names, and **187 are demonstrably the owner of a forge URL in the same dataset**. So `P2037` GitHub username reconciles to a person or organisation item, where matching a display string reconciles to nothing. `P178` developer is therefore tractable and currently not emitted -- it is reported as `unresolved-author` so the gap stays visible. |
 | `description` | Wikidata descriptions are short, lower case and carry no terminal punctuation; these are sentences, 348 of them ending in a full stop and 413 beginning with a capital. Usable, but only after rewriting. |
 

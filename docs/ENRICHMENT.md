@@ -27,6 +27,39 @@ the CSV:
 | `cran` | the package name, so `P5565` instead of a bare link | 39 of 39 |
 | `pypi` | the package name, for `P5568` | 1 of 1 |
 | `DOI` | the registrant: `10.5281` is Zenodo, a release DOI, which belongs on `P348` and not on the item | 24 of 34 |
+| `tags` (via `tags.md`) | a scope note per term, which is what makes reconciling them to `P921` a decision rather than a guess | 55 of 56 |
+
+## A second file in the repository that nobody was reading
+
+`tags.md` is not the CSV, but it is open-archaeo, and it carries a **scope note
+for 55 of the 56 tags** -- a one-line definition of what each term covers. It
+was used by nothing in this pipeline until `subjects` started reading it.
+
+That matters more than it sounds. Reconciling *Seriation* or *Shape
+recognition* to a Wikidata item on the strength of the word alone is guesswork;
+with "technique for identifying chronological sequences based on the ordered
+properties of archaeological assemblages" beside it, it is a decision. The
+worksheet written by `python py/wikidata/main.py subjects` carries the note,
+the use count and three example tools per term.
+
+Reading it also surfaced two problems in the source:
+
+- **`Harris matrix` has no scope note** because `tags.md` spells it *Harrix
+  matrix*. The typo is upstream.
+- **The CSV carries both spellings**: ten entries under the correct one and one
+  under the typo, so one tool is tagged with a term that exists nowhere else.
+
+Both belong in an upstream issue rather than a local fix. open-archaeo is the
+register; correcting it here would put the correction in the wrong place.
+
+**Six of the 56 tags are not subjects at all.** *Bits and bobs*, which sits on
+17 software entries, is open-archaeo's own word for miscellaneous -- importing
+it as `P921` would assert that seventeen tools are about miscellany. *Lists* is
+the same. And *Datasets*, *Templates*, *Platforms and publications* and
+*Educational resources and practical guides* say what a thing **is** rather
+than what it is about, which is `P31` territory. The worksheet marks all six,
+and `--apply` refuses to write them into the subject vocabulary even if
+someone fills in a Q-id.
 
 ## One seam still open in the data
 
@@ -60,7 +93,7 @@ extraction. That gap has to come from the repository.
 | **`P275` copyright licence** -- the largest, missing for all 416 | GitHub API `/repos/{owner}/{repo}`, field `license.spdx_id` | An SPDX identifier per repository. `P1324` carries a constraint expecting the item to state a licence, so this is the gap that turns into a constraint violation. |
 | `P571` inception | same call, `created_at` | Repository creation, which is a defensible proxy and not the same as the tool's inception. Worth a qualifier saying so. |
 | `P277` for the 73 without a platform | same call, `language` | GitHub's own detection, which is imperfect but better than the description. |
-| `P921` further subjects | same call, `topics` | Repository topics, alongside the open-archaeo tags. |
+| `P921` further subjects | same call, `topics` | Repository topics, alongside the open-archaeo tags. Note the tags themselves are not a gap -- they need reconciling, not fetching, which is what `subjects` is for. |
 | **abandonware** (`P31` with `P580`/`P582`) | same call, `archived` | A tool whose repository is archived is a tool that stopped. open-archaeo has no way to say this. |
 | `P348` version, `P577` per release | GitHub `/releases`, or CRAN `DESCRIPTION`, or the Zenodo record | Version strings with their dates, which is the pattern the WikiProject documents. |
 | `P275`, `P178` with ORCID, `P577` | CRAN `DESCRIPTION` for the 39 CRAN packages | CRAN requires a licence field, so those 39 are the cheapest licences in the set. |

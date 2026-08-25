@@ -5,6 +5,7 @@
     python py/wikidata/main.py preview         # docs/preview.html: what would be written
     python py/wikidata/main.py reconcile       # what is in Wikidata already
     python py/wikidata/main.py vocab --suggest # resolve the controlled values
+    python py/wikidata/main.py subjects        # the P921 worksheet
     python py/wikidata/main.py push            # dry run; --live to write
     python py/wikidata/main.py sparql          # build docs/sparql.html
     python py/wikidata/main.py site            # build docs/index.html
@@ -41,13 +42,15 @@ import reconcile as reconcile_step    # noqa: E402
 # 'site' is a standard-library module name, so the module is 'landing'.
 import landing as landing_step        # noqa: E402
 import sparql as sparql_step          # noqa: E402
+import subjects as subjects_step      # noqa: E402
 import vocabulary as vocabulary_step  # noqa: E402
 from reconcile import CONCORDANCE_NAME  # noqa: E402
 from transform import (                # noqa: E402
     DEFAULT_CSV, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
-STEPS = ["check", "preview", "reconcile", "vocab", "push", "sparql", "site"]
+STEPS = ["check", "preview", "reconcile", "vocab", "subjects", "push",
+         "sparql", "site"]
 
 DEFAULT_OUT_DIR = ROOT / "out"
 # The half of the dataset this team owns. See out/Python/README.md.
@@ -153,6 +156,23 @@ def step_vocab(args: argparse.Namespace) -> int:
     still_open = sum(len(v) for v in open_by_section.values())
     print(f"{total} controlled values, {still_open} still unresolved -> {args.path}",
           file=sys.stderr)
+    return 0
+
+
+def step_subjects(args: argparse.Namespace) -> int:
+    """Build the P921 reconciliation worksheet, or read a filled one back."""
+    if args.apply:
+        subjects_step.apply_worksheet(args.out, args.vocabulary)
+        return 0
+    # Deliberately not sliced. The subject vocabulary is shared between the two
+    # teams, so a worksheet covering half the data would produce half a
+    # vocabulary and two different Q-ids for the same term.
+    records = load(args.csv)
+    software = [simplify(r) for r in records
+                if r["category"] in set(SOFTWARE_CATEGORIES)]
+    everything = [simplify(r) for r in records]
+    subjects_step.run(software, output=args.out, tags_md=args.tags_md,
+                      suggest=args.suggest, all_rows=everything)
     return 0
 
 
@@ -270,6 +290,15 @@ def add_vocab_arguments(parser: argparse.ArgumentParser) -> None:
                              "Never writes a Q-id")
 
 
+def add_subjects_arguments(parser: argparse.ArgumentParser) -> None:
+    # No --slice here: see step_subjects.
+    parser.add_argument("--csv", type=Path, default=DEFAULT_CSV,
+                        help="path to open-archaeo.csv")
+    parser.add_argument("--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
+                        help="vocabulary file that --apply writes into")
+    subjects_step.add_arguments(parser)
+
+
 def add_push_arguments(parser: argparse.ArgumentParser) -> None:
     _add_concordance(parser)
     parser.add_argument("--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
@@ -308,6 +337,7 @@ HANDLERS = {
     "preview": (add_preview_arguments, step_preview),
     "reconcile": (add_reconcile_arguments, step_reconcile),
     "vocab": (add_vocab_arguments, step_vocab),
+    "subjects": (add_subjects_arguments, step_subjects),
     "push": (add_push_arguments, step_push),
     "sparql": (add_sparql_arguments, step_sparql),
     "site": (landing_step.add_arguments, step_site),

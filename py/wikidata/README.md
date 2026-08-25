@@ -13,6 +13,7 @@ preview    →  docs/preview.html                      every item, as Wikidata s
 site       →  docs/index.html                        the landing page that links them
 reconcile  →  out/open-archaeo-concordance.csv       what already exists
 vocab      →  vocabulary.json                        what the controlled values mean
+subjects   →  out/tag-reconciliation.csv             the P921 worksheet, with scope notes
 push       →  Wikidata                               write, dry run by default
 sparql     →  docs/sparql.html                       queries that check the result
 ```
@@ -65,6 +66,7 @@ What `check` actually verifies against Wikidata:
 | `api.py` | HTTP, the query service, and the Action API client. |
 | `reconcile.py` | Matching and the concordance. |
 | `vocabulary.py` | The controlled-value registry. |
+| `subjects.py` | The P921 worksheet, and reading a filled one back. |
 | `push.py` | Planning and writing. |
 | `check.py` | The preflight. |
 | `queries.py` | The example queries, as source. |
@@ -196,6 +198,69 @@ the choice stays with a person. `push` skips a statement whose value is
 unresolved rather than guessing: an invented Q-id is a wrong statement that
 looks like a right one.
 
+### `subjects`
+
+```bash
+python py/wikidata/main.py subjects            # write out/tag-reconciliation.csv
+python py/wikidata/main.py subjects --suggest  # with Wikidata candidates
+python py/wikidata/main.py subjects --apply    # read a filled one back
+```
+
+`P921` main subject is the largest block of unresolved values in the import --
+56 terms across all 416 entries -- and the only one that cannot be derived from
+a URL. It has to be decided term by term, so it gets a worksheet of its own
+rather than a line in `vocab --suggest`.
+
+**The scope notes make it tractable.** `tags.md` sits in the repository, is
+used by nothing else, and carries a one-line definition for 55 of the 56 tags.
+That definition is the difference between matching *Seriation* to the right
+Wikidata item and matching it to a plausible wrong one, so the worksheet puts
+it beside every term, together with the use count and three example tools.
+
+| Column | What it is |
+|---|---|
+| `tag` | The term as it appears in open-archaeo. |
+| `kind` | `subject`, `form` or `catch-all` -- see below. Editable. |
+| `uses_software` | How many of the 416 software entries carry it. |
+| `uses_all` | How many of all 562 entries do. |
+| `scope_note` | From `tags.md`. |
+| `examples` | Three tools carrying the tag, for sanity. |
+| `search_term` | What to search Wikidata for; differs from the tag where the tag is a phrase. Editable. |
+| `qid` | **The column you fill.** |
+| `qid_label` | Search hits from `--suggest`, for choosing between. Never decides. |
+| `note` | Anything worth recording, including two data problems found on the way. |
+
+**Not every tag is a subject.** Six are marked otherwise, and the distinction
+matters because `P921` asserts what a tool is *about*:
+
+- `catch-all` -- *Bits and bobs* is open-archaeo's own word for miscellaneous
+  and sits on 17 software entries. Importing it as a subject would assert that
+  seventeen tools are about miscellany. *Lists* is the same case.
+- `form` -- *Datasets*, *Templates*, *Platforms and publications*,
+  *Educational resources and practical guides* say what a thing **is**, not
+  what it is about. They belong on `P31`, or nowhere.
+
+`--apply` refuses to write those into the `P921` vocabulary even if someone
+fills in a Q-id, and says which and why. It also refuses anything that is not
+shaped like a Q-id, and anything that is not a tag in the data.
+
+**Two data problems the worksheet reports.** *Harris matrix* has no scope note
+because `tags.md` spells it *Harrix matrix* -- a typo upstream. And the CSV
+carries both spellings, ten entries under the correct one and one under the
+typo. Both are worth an upstream issue rather than a local fix: open-archaeo is
+the register, and correcting it here would put the fix in the wrong place.
+
+**This step is deliberately not sliced.** The subject vocabulary is shared
+between the two hackathon teams, so a worksheet covering half the data would
+produce half a vocabulary and two different Q-ids for the same term. It is also
+the natural handover format: whoever reconciles fills the `qid` column,
+`--apply` reads it back, and both halves end up using the same items.
+
+`P921` is the choice here over `P366` has use, which would read as *what the
+tool is for* rather than *what it is about*. For something like *Radiocarbon
+dating, calibration and sequencing* the two are nearly the same claim; for
+*Zooarchaeology* they are not, and `P921` is the safer of the two.
+
 ### `push`
 
 | Flag | Effect |
@@ -310,6 +375,7 @@ python py/wikidata/main.py preview          # every item and every problem, in a
 python py/wikidata/main.py                  # do the identifiers still hold?
 python py/wikidata/main.py reconcile        # what is in Wikidata already?
 python py/wikidata/main.py vocab --suggest  # find candidates, choose by hand
+python py/wikidata/main.py subjects         # the 56 subject terms, with their definitions
 python py/wikidata/main.py preview --labels # look again: now with Q-ids resolved
 python py/wikidata/main.py push             # the dry run, as text
 python py/wikidata/main.py push --only <id> --only <id> --only <id> --live
