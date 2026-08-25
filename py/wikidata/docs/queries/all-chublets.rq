@@ -1,0 +1,21 @@
+# Everything currently tagged
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
+PREFIX pq: <http://www.wikidata.org/prop/qualifier/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+
+SELECT ?item ?itemLabel ?itemDescription ?repo ?licenceLabel ?languageLabel
+WHERE {
+  ?item wdt:P31 wd:Q141115627 ;
+        wdt:P6104 wd:Q141169143 .
+  OPTIONAL { ?item wdt:P1324 ?repo . }
+  OPTIONAL { ?item wdt:P275 ?licence . }
+  OPTIONAL { ?item wdt:P277 ?language . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
+}
+ORDER BY ?itemLabel

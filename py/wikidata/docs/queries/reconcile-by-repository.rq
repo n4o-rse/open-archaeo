@@ -1,0 +1,22 @@
+# Reconcile a repository URL
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
+PREFIX pq: <http://www.wikidata.org/prop/qualifier/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+
+SELECT ?repo ?item ?itemLabel ?tagged
+WHERE {
+  VALUES ?repo {
+    <https://github.com/ISAAKiel/quantAAR>
+    <https://github.com/tesselle/tabula>
+    <https://github.com/benmarwick/rrtools>
+  }
+  ?item wdt:P1324 ?repo .
+  BIND(EXISTS { ?item wdt:P6104 wd:Q141169143 } AS ?tagged)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
+}

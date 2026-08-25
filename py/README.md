@@ -8,10 +8,14 @@ no installation beyond Python 3.9+.
 also runs standalone.
 
 ```bash
+python py/main.py                                     # transform, then split
 python py/main.py --list                              # available steps
 python py/main.py transform                           # write out/*.csv
+python py/main.py split                               # two slices for parallel work
 python py/main.py filter --software --format simple   # ad-hoc slicing
 python py/main.py values                              # controlled vocabularies
+
+python py/wikidata/main.py                            # the Wikidata route
 
 python py/transform.py --out-dir out/                 # same step, standalone
 ```
@@ -52,6 +56,33 @@ comparing each output row against its raw counterpart.
 Within the software subset only one entry (`nervia`) has two repository URLs,
 and none has both a CRAN and a PyPI page, so in practice those columns are
 single-valued.
+
+Run without a step, `main.py` does the usual thing: `transform`, then `split`.
+That is the whole preparation of the dataset, and it is what you want after
+pulling a new `open-archaeo.csv`. Both steps only write into `out/`, and the
+split is deterministic, so running it again is harmless.
+
+`split` writes `out/OpenRefine/` and `out/Python/`: two halves of the software
+table, stratified so that each carries roughly half of every category, half the
+registry entries, half the DOIs and half the archived snapshots. Each folder
+has a README of its own explaining how to model that slice with the tool it is
+named after. The two do not overlap, so both can be imported at the same time.
+
+## The Wikidata route
+
+Everything to do with the Wikidata import lives in `py/wikidata/`, with its own
+entry point and its own README:
+
+```bash
+python py/wikidata/main.py            # check: verifies the route, writes nothing
+python py/wikidata/main.py --list     # the five steps
+```
+
+Five steps -- `check`, `reconcile`, `vocab`, `push`, `sparql` -- producing a
+concordance of what is already in Wikidata, a registry of the controlled
+values, the writes themselves, and a query page. `check` is the default and
+does not write anywhere. See `py/wikidata/README.md` for the flags and
+`py/wikidata/docs/MAPPING.md` for the mapping itself.
 
 ## Is everything usable already in the file?
 

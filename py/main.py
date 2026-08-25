@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Single entry point for the open-archaeo processing steps.
 
+Run without a step it does the usual thing: transform, then split. That is the
+whole preparation of the dataset, and it is what you want after pulling a new
+``open-archaeo.csv``.
+
 Every step is a module next to this file, runnable standalone as well::
 
+    python py/main.py                              # transform, then split
     python py/main.py --list                       # available steps
     python py/main.py transform                    # write out/*.csv
     python py/main.py filter --software --format simple
     python py/main.py values                       # controlled vocabularies
+    python py/main.py split                        # two slices for parallel work
 
 Adding a step means writing ``py/<name>.py`` with a ``run()``, an
 ``add_arguments(parser)`` and a one-line docstring, then listing it in
@@ -21,13 +27,20 @@ import re
 import sys
 from pathlib import Path
 
+import split as split_module
 import transform
 from transform import (
     DEFAULT_CSV, SIMPLE_COLUMNS, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
 # Steps offered by the orchestrator, in the order they are listed.
-STEPS = ["transform", "filter", "values"]
+# The Wikidata route is a package of its own: see py/wikidata/README.md.
+STEPS = ["transform", "filter", "values", "split"]
+
+# What a bare ``python py/main.py`` runs, in order. Both steps only write into
+# out/, so running it again is harmless -- and the split is deterministic, so
+# the two slices come back identical unless the source data changed.
+DEFAULT_PIPELINE = ["transform", "split"]
 
 # Columns that carry a link or identifier. ``--has`` accepts any of these keys.
 RESOURCE_COLUMNS = transform.LINK_COLUMNS
@@ -208,6 +221,12 @@ def step_values(args: argparse.Namespace) -> int:
     return 0
 
 
+def step_split(args: argparse.Namespace) -> int:
+    """Split the software table into two stratified slices for parallel work."""
+    split_module.run(args.source, args.out_dir, quiet=args.quiet)
+    return 0
+
+
 def step_transform(args: argparse.Namespace) -> int:
     """Write the table and its documentation to the output directory."""
     transform.run(args.csv, args.out_dir,
@@ -276,7 +295,28 @@ def build_parser() -> argparse.ArgumentParser:
                                help="path to open-archaeo.csv")
     values_parser.set_defaults(handler=step_values)
 
+    split_parser = subparsers.add_parser("split", help=step_split.__doc__)
+    split_module.add_arguments(split_parser)
+    split_parser.set_defaults(handler=step_split)
+
     return parser
+
+
+def run_default(parser: argparse.ArgumentParser) -> int:
+    """Run the steps in DEFAULT_PIPELINE with their defaults.
+
+    Each step is re-parsed from its own name so that it gets the defaults its
+    subparser defines, rather than a namespace assembled here that would drift
+    the moment a step grows an option.
+    """
+    print(f"no step given: running {', '.join(DEFAULT_PIPELINE)}", file=sys.stderr)
+    for name in DEFAULT_PIPELINE:
+        print(f"\n== {name} ==", file=sys.stderr)
+        args = parser.parse_args([name])
+        code = args.handler(args)
+        if code:
+            return code
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -285,15 +325,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list:
         handlers = {"transform": step_transform, "filter": step_filter,
-                    "values": step_values}
+                    "values": step_values, "split": step_split}
         print("Available steps:")
         for name in STEPS:
-            print(f"  {name:<12} {handlers[name].__doc__}")
+            marker = " (default)" if name in DEFAULT_PIPELINE else ""
+            print(f"  {name:<12} {handlers[name].__doc__}{marker}")
         return 0
 
     if not getattr(args, "handler", None):
-        parser.print_help()
-        return 1
+        return run_default(parser)
 
     return args.handler(args)
 

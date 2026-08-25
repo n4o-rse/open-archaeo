@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""The registry mapping open-archaeo's controlled strings to Q-ids.
+
+P277, P1547, P921 and the P8423 qualifier all take *items* as values, and
+open-archaeo gives strings. ``vocabulary.json`` is where one becomes the other:
+every value starts as ``null`` and stays that way until a person fills it in.
+
+Nothing here ever writes a Q-id by itself. Label search is a good way to find a
+candidate and a bad way to choose one.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from api import search_entities
+from model import FORGE_VCS, VOCABULARY_SECTIONS
+
+DEFAULT_PATH = Path(__file__).resolve().parent / "vocabulary.json"
+
+PLATFORM_SECTION = {
+    "language": "programming_language",
+    "host application": "host_application",
+    "deployment": "deployment",
+}
+
+
+def scaffold(rows: list[dict]) -> dict:
+    """Collect every controlled value that needs a Q-id, with null for unknown."""
+    vocabulary: dict = {
+        "_note": (
+            "Q-ids for the controlled values of open-archaeo. null means "
+            "unresolved; the push step skips a statement whose value is "
+            "unresolved rather than guessing. Fill in by hand, or run "
+            "'python py/wikidata/main.py vocab --suggest' for candidates."
+        ),
+        "_sections": VOCABULARY_SECTIONS,
+    }
+    for section in VOCABULARY_SECTIONS:
+        vocabulary[section] = {}
+
+    for host in sorted({h for row in rows
+                        for h in row["repository_host"].split("|") if h}):
+        vocabulary["version_control_system"][FORGE_VCS.get(host, host)] = None
+    vocabulary["version_control_system"].pop("", None)
+
+    for row in rows:
+        section = PLATFORM_SECTION.get(row["platform_role"])
+        if section and row["platform"]:
+            vocabulary[section].setdefault(row["platform"], None)
+        for tag in row["tags"].split("|"):
+            if tag:
+                vocabulary["tag"].setdefault(tag, None)
+
+    for section in VOCABULARY_SECTIONS:
+        vocabulary[section] = dict(sorted(vocabulary[section].items()))
+    return vocabulary
+
+
+def merge(fresh: dict, existing: dict) -> dict:
+    """Keep every Q-id already resolved; add whatever is new in the data."""
+    for section in VOCABULARY_SECTIONS:
+        for key, value in existing.get(section, {}).items():
+            if value and key in fresh[section]:
+                fresh[section][key] = value
+    return fresh
+
+
+def unresolved(vocabulary: dict) -> dict[str, list[str]]:
+    return {section: [k for k, v in vocabulary[section].items() if not v]
+            for section in VOCABULARY_SECTIONS}
+
+
+def suggest(vocabulary: dict, *, limit: int = 3) -> None:
+    """Print Wikidata search hits for every unresolved value. Writes nothing."""
+    for section, terms in unresolved(vocabulary).items():
+        if not terms:
+            continue
+        print(f"\n== {section} ({len(terms)} unresolved) ==")
+        for term in terms:
+            hits = search_entities(term, limit=limit)
+            print(f"\n{term}")
+            for hit in hits:
+                print(f"    {hit['id']:<12} {hit.get('label', '')} -- "
+                      f"{hit.get('description', '')}")
+            if not hits:
+                print("    (no hits)")
+
+
+def load(path: Path = DEFAULT_PATH) -> dict:
+    if not path.is_file():
+        sys.exit(f"error: no vocabulary at {path}. Run 'vocab' first.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save(vocabulary: dict, path: Path = DEFAULT_PATH) -> None:
+    path.write_text(json.dumps(vocabulary, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
