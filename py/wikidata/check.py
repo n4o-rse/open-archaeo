@@ -190,26 +190,28 @@ def check_plan(report: Report, rows: list[dict], vocab: dict | None) -> None:
         report.line(WARN, "no matched rows, so push would write nothing")
         return
 
-    skipped: list[str] = []
     by_property: dict[str, int] = {}
+    by_code: dict[str, tuple[str, int]] = {}
     qualifiers = 0
     for row in targets:
-        for claim in build_claims(row, vocab, skipped):
+        claims, issues = build_claims(row, vocab)
+        for claim in claims:
             by_property[claim.prop] = by_property.get(claim.prop, 0) + 1
             qualifiers += len(claim.qualifiers)
+        for issue in issues:
+            severity, count = by_code.get(issue.code, (issue.severity, 0))
+            by_code[issue.code] = (severity, count + 1)
     total = sum(by_property.values())
     report.line(OK, f"{len(targets)} items, {total} statements, "
                     f"{qualifiers} qualifiers")
     for prop, count in sorted(by_property.items(), key=lambda kv: -kv[1]):
         report.line(OK, f"  {prop}: {count}")
-    if skipped:
-        reasons: dict[str, int] = {}
-        for line in skipped:
-            key = line.split(": ", 1)[1].split(" --")[0][:60]
-            reasons[key] = reasons.get(key, 0) + 1
-        report.line(WARN, f"{len(skipped)} values skipped, never guessed:")
-        for reason, count in sorted(reasons.items(), key=lambda kv: -kv[1])[:6]:
-            report.line(WARN, f"  {count} x {reason}")
+    for code, (severity, count) in sorted(by_code.items(),
+                                          key=lambda kv: -kv[1][1]):
+        report.line(FAIL if severity == "blocked" else WARN,
+                    f"  {count} x {code} ({severity})")
+    if by_code:
+        report.line(OK, "run 'preview' to see these item by item")
 
 
 def check_credentials(report: Report, config_path: Path, *,

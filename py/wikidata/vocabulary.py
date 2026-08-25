@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 
 from api import search_entities
-from model import FORGE_VCS, VOCABULARY_SECTIONS
+from model import (
+    CATEGORY_CLASSES, FORGE_VCS, SUPERCLASSES, VOCABULARY_SECTIONS,
+)
 
 DEFAULT_PATH = Path(__file__).resolve().parent / "vocabulary.json"
 
@@ -53,6 +55,15 @@ def scaffold(rows: list[dict]) -> dict:
         for tag in row["tags"].split("|"):
             if tag:
                 vocabulary["tag"].setdefault(tag, None)
+
+    # The category classes and the superclasses are known in advance -- what is
+    # unknown is which items they map to, which is exactly what this file is
+    # for. Seeding them means an unresolved class shows up as a red issue on
+    # the preview rather than as silence.
+    for category in CATEGORY_CLASSES:
+        vocabulary["item_class"].setdefault(category, None)
+    for label in SUPERCLASSES:
+        vocabulary["superclass"].setdefault(label, None)
 
     for section in VOCABULARY_SECTIONS:
         vocabulary[section] = dict(sorted(vocabulary[section].items()))

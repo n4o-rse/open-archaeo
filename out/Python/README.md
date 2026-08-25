@@ -30,38 +30,68 @@ The class alone would also catch research software modelled by other
 communities. `P6104` is what draws the boundary and makes the set retrievable
 as a set, which is how both teams will check each other's progress.
 
-## Staying inside the slice
+## This file is the default
 
-Every step that reads the source table takes `--slice`, and it is the flag that
-keeps the two teams apart:
-
-```bash
-python py/wikidata/main.py --slice out/Python/open-archaeo-software.csv
-```
-
-It reads the `id` column of the slice file and keeps only those entries. Set it
-on **check**, **reconcile**, **vocab** and **push** alike. Forgetting it on
-`push --live` is the one mistake in this workflow that is awkward to undo, so
-put it in a shell alias for the day:
+Every step in `py/wikidata/` reads **this** file unless told otherwise. No flag
+to remember, no way for the two teams to collide by accident:
 
 ```bash
-alias oa='python py/wikidata/main.py --slice out/Python/open-archaeo-software.csv'
-oa                 # preflight
-oa reconcile
-oa push
+python py/wikidata/main.py preview     # works on out/Python/ already
 ```
+
+`--slice FILE` points elsewhere and `--full` uses all 416 entries. Defaulting
+rather than requiring a flag is deliberate: forgetting `--slice` on
+`push --live` is the one mistake in this workflow that is awkward to undo, and
+a default cannot be forgotten.
+
+## Look before you write
+
+```bash
+python py/wikidata/main.py preview
+```
+
+Writes `py/wikidata/docs/preview.html` -- **all 208** of your entries with the
+statements they would produce, laid out the way Wikidata lays out statements.
+Open it in a browser. It is the test of the mapping, which is why it shows
+everything rather than a sample.
+
+The filter bar gets you to the interesting part: by category, by whether the
+item has problems, by a specific issue code, or by free text. The issue table
+at the top is clickable -- each row filters the page down to the items that
+raised it.
+
+### The three boxes under each item
+
+| Box | Meaning |
+|---|---|
+| **Blocked**, red | The import would produce something *wrong or invalid*: a statement missing a required qualifier, an unresolved class, or an item with no Q-id at all. Close these before writing. |
+| **Deferred**, amber | A value exists in open-archaeo and is deliberately not written here -- it belongs on a different statement, or the Q-id it needs has not been chosen yet. Nothing is wrong; something is waiting. |
+| **Notes**, grey | A remark to see once: a description that still reads as a sentence, for instance. |
+
+Filtering to **with blocked issues** is the worklist for the day. Filtering to
+**with no issues** is the set that is genuinely ready.
+
+Before `reconcile` runs, every item shows a red `not-reconciled` -- honest, and
+a good picture of how much matching is left. Run it after, and the page ends
+with a ready-to-copy command for the first three items that are reconciled
+*and* carry nothing blocked.
 
 ## The session
 
 ```bash
-oa --offline                     # does the data still transform?
-oa                               # do the identifiers still hold on Wikidata?
-oa reconcile                     # what is already in Wikidata?
-oa                               # check again: the plan is now real
-oa push                          # read the dry run
-oa push --limit 3 --live         # three items, then go and look at them
-oa push --live                   # the rest
+python py/wikidata/main.py --offline        # does the data still transform?
+python py/wikidata/main.py preview          # look at the shape of the statements
+python py/wikidata/main.py                  # do the identifiers hold on Wikidata?
+python py/wikidata/main.py reconcile        # what is already in Wikidata?
+python py/wikidata/main.py preview --labels # look again, now with values resolved
+python py/wikidata/main.py push             # the dry run, as text
+python py/wikidata/main.py push --only <id> --only <id> --only <id> --live
+python py/wikidata/main.py push --live      # the rest, once those three look right
 ```
+
+The preview page ends with exactly that three-item command, filled in with the
+first three reconciled ids, so it can be copied rather than assembled. Three is
+the right size for a batch you intend to open on Wikidata afterwards and read.
 
 `check` is the default step and writes nothing anywhere. It verifies that the
 two obligatory Q-ids exist, that every property still has the datatype the

@@ -36,16 +36,16 @@ also catch research software modelled by anyone else.
 | `pypi` | 1 | `P5568` PyPI project | -- | verified |
 | `internetarchive` | 222 | `P1065` archive URL | `P2960` archive date | verified, as qualifier |
 | `publication` | 25 | `P1343` described by source | item, not URL -- see below | decision |
-| `category` | 416 | `P31` instance of | -- | decision, see below |
+| `category` | 416 | `P31` instance of | -- | second class value, resolved through vocabulary.json |
 | `platform` (`language`) | 301 | `P277` programmed in | -- | verified property, derived value |
 | `platform` (`host application`) | 34 | `P1547` depends on software | -- | verified property, derived value |
 | `platform` (`deployment`) | 8 | refines `P31` | -- | decision |
-| `tags` | 416 | `P921` main subject | -- | needs 59 reconciliations |
+| `tags` | 416 | `P921` main subject | -- | needs 56 reconciliations |
 | `authors` | 416 | `P178` developer | `P1545` series ordinal | see below |
 | `name` | 416 | label **and** `P2561` name | -- | verified |
 | `description` | 416 | item description | -- | needs rewriting |
-| `blogpost`, `youtube` | 4 | `P973` described at URL | -- | decision |
-| `url` (open-archaeo page) | 416 | `P973` described at URL | -- | interim, see below |
+| `url` (open-archaeo page) | 416 | `P2888` exact match | -- | see below |
+| `blogpost`, `youtube` | 4 | `P973` described at URL | -- | describes without being the same thing |
 | `twitter`, `notes` | 0 / 2 | -- | -- | not import material |
 
 ## What the columns contain beyond their face value
@@ -111,14 +111,38 @@ software (`Q7397`). Since every item also carries the chublets class
 `P31` value or whether the category is better expressed as `P279` on the class
 items themselves.
 
-**An open-archaeo identifier.** There is no property for open-archaeo, so the
-entry page currently has to go in as `P973` described at URL. The precedent for
-doing this properly is `P6830` swMATH work ID: a domain registry with an
-external-identifier property of its own. Proposing `open-archaeo ID` with the
-slug as its value would make the registry a first-class source in Wikidata and
-give chublets a stable join key in both directions. The minted `id` column is
-**not** a candidate -- it is a function of the slug, so it changes when an entry
-is renamed.
+**Exact match rather than described at URL.** The open-archaeo entry is not a
+page that merely mentions the tool; it is a record *of* the same thing.
+`P2888` exact match carries that reading precisely: its `equivalent property`
+is `skos:exactMatch` and `schema:sameAs`, and its unique-value constraint
+matches the one-entry-one-item relation. So the entry page goes in as `P2888`,
+and `P973` described at URL is left for the blog posts and videos, which
+describe a tool without being the same thing as it.
+
+Worth stating plainly: in current Wikidata practice `P2888` is used mostly for
+ontology and vocabulary alignment -- its documented examples map items to DOID
+and IPTC concepts -- so a registry record is a slightly unusual value for it.
+The semantics fit; the company it keeps is different. If that turns out to be
+contentious, `P973` still works and loses only the "same thing" assertion.
+
+**An open-archaeo identifier would be better than either.** The precedent is
+`P6830` swMATH work ID: a domain registry with an external-identifier property
+of its own. Proposing `open-archaeo ID` with the slug as its value would make
+the registry a first-class source and give chublets a stable join key in both
+directions. The minted `id` column is **not** a candidate -- it is a function
+of the slug, so it changes when an entry is renamed.
+
+**Classification beyond the chublet class.** Every item carries the chublet
+class and the WikiProject. Neither says what *kind* of software it is, which is
+what the `category` column knows. So `P31` takes further values: one per
+category, plus any superclass applied to every item. Both come from
+`vocabulary.json`, which means an unresolved category surfaces as a blocked
+issue on the preview page rather than as a quietly thinner item.
+
+Note that if the chublet class is already a `P279` subclass of the superclass,
+stating both is redundant for a SPARQL query written as `wdt:P31/wdt:P279*`.
+Whether to state it anyway is a judgement about how the data will be queried,
+which is why it is a vocabulary entry rather than a hard-coded statement.
 
 **Descriptions.** Wikidata descriptions are short, lower case and carry no
 terminal punctuation. These are sentences: 348 end in a full stop, 413 begin

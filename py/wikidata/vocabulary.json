@@ -1,0 +1,99 @@
+{
+  "_note": "Q-ids for the controlled values of open-archaeo. null means unresolved; the push step skips a statement whose value is unresolved rather than guessing. Fill in by hand, or run 'python py/wikidata/main.py vocab --suggest' for candidates.",
+  "_sections": {
+    "version_control_system": "value of P8423 on the repository statement",
+    "programming_language": "value of P277, from platform_role = language",
+    "host_application": "value of P1547, from platform_role = host application",
+    "deployment": "refines P31, from platform_role = deployment",
+    "tag": "value of P921, one per open-archaeo tag",
+    "item_class": "second P31 value, one per open-archaeo category",
+    "superclass": "further P31 values applied to every item"
+  },
+  "version_control_system": {
+    "Git": null
+  },
+  "programming_language": {
+    "Java": null,
+    "JavaScript": null,
+    "LaTeX": null,
+    "MATLAB": null,
+    "Python": null,
+    "R": null,
+    "Ruby": null
+  },
+  "host_application": {
+    "ArcGIS": null,
+    "AutoCAD": null,
+    "Blender": null,
+    "LibreOffice Calc": null,
+    "Microsoft Excel": null,
+    "Open Data Kit": null,
+    "QGIS": null,
+    "Stellarium": null
+  },
+  "deployment": {
+    "Mobile app": null,
+    "Web app": null
+  },
+  "tag": {
+    "3D modelling": null,
+    "API interfaces and web scrapers": null,
+    "Aerial and satellite imagery": null,
+    "Archaeoastronomy": null,
+    "Archaeogenetics": null,
+    "Artefact morphology": null,
+    "Augmented reality": null,
+    "Bibliography": null,
+    "Biological anthropology": null,
+    "Bits and bobs": null,
+    "Ceramic analysis": null,
+    "Chronological modelling": null,
+    "Cultural evolution": null,
+    "Data collection": null,
+    "Data management": null,
+    "Datasets": null,
+    "Dendrochronology": null,
+    "Diagrams and visualizations": null,
+    "Drivers and IO": null,
+    "Educational resources and practical guides": null,
+    "Geoarchaeology": null,
+    "Geophysical survey": null,
+    "Harris matrix": null,
+    "Harrix matrix": null,
+    "Iconography": null,
+    "Instrumental Neutron activation analysis": null,
+    "Literary analysis and epigraphy": null,
+    "Lithic analysis": null,
+    "Luminescence dating": null,
+    "Machine learning": null,
+    "Museums": null,
+    "Palaeobotany": null,
+    "Palaeoclimate modelling": null,
+    "Photogrammetry": null,
+    "Photography": null,
+    "Platforms and publications": null,
+    "Public archaeology": null,
+    "Radiocarbon dating, calibration and sequencing": null,
+    "Schemas and ontologies": null,
+    "Seriation": null,
+    "Shape recognition": null,
+    "Simulation": null,
+    "Site mapping": null,
+    "Spatial analysis": null,
+    "Stable isotope analysis": null,
+    "Statistical analysis": null,
+    "Templates": null,
+    "Viewshed analysis": null,
+    "Writing": null,
+    "X-Ray Fluorescence": null,
+    "Zooarchaeology": null
+  },
+  "item_class": {
+    "Packages and libraries": null,
+    "Scripts": null,
+    "Standalone software": null
+  },
+  "superclass": {
+    "research software": null
+  }
+}

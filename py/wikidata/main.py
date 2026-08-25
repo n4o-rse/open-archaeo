@@ -2,6 +2,7 @@
 """Entry point for the open-archaeo -> Wikidata route.
 
     python py/wikidata/main.py                 # check: verifies everything, writes nothing
+    python py/wikidata/main.py preview         # docs/preview.html: what would be written
     python py/wikidata/main.py reconcile       # what is in Wikidata already
     python py/wikidata/main.py vocab --suggest # resolve the controlled values
     python py/wikidata/main.py push            # dry run; --live to write
@@ -10,6 +11,10 @@
 ``check`` is the default because the expensive way to discover that a property
 changed datatype, or that a Q-id does not exist, is halfway through a batch of
 edits. Everything except ``push --live`` is read-only.
+
+Every step works on ``out/Python/open-archaeo-software.csv`` by default -- the
+half of the dataset this team owns during the hackathon. ``--slice`` points
+somewhere else and ``--full`` uses all 416 entries.
 
 Standard library only, like the rest of this package: reads go to the Wikidata
 Query Service over urllib, writes to the Action API.
@@ -29,6 +34,7 @@ sys.path.insert(0, str(HERE))      # this folder, when run from elsewhere
 sys.path.insert(0, str(PACKAGE_DIR))  # for transform.py
 
 import check as check_step            # noqa: E402
+import preview as preview_step        # noqa: E402
 import push as push_step              # noqa: E402
 import reconcile as reconcile_step    # noqa: E402
 import sparql as sparql_step          # noqa: E402
@@ -38,9 +44,11 @@ from transform import (                # noqa: E402
     DEFAULT_CSV, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
-STEPS = ["check", "reconcile", "vocab", "push", "sparql"]
+STEPS = ["check", "preview", "reconcile", "vocab", "push", "sparql"]
 
 DEFAULT_OUT_DIR = ROOT / "out"
+# The half of the dataset this team owns. See out/Python/README.md.
+DEFAULT_SLICE = ROOT / "out" / "Python" / "open-archaeo-software.csv"
 DEFAULT_CONFIG = HERE / "config.ini"
 DEFAULT_VOCABULARY = HERE / "vocabulary.json"
 DEFAULT_DOCS = HERE / "docs"
@@ -70,7 +78,8 @@ def source_rows(args: argparse.Namespace) -> list[dict]:
     if not getattr(args, "all_categories", False):
         records = [r for r in records if r["category"] in set(SOFTWARE_CATEGORIES)]
     rows = [simplify(r) for r in records]
-    wanted = slice_ids(getattr(args, "slice", None))
+    wanted = None if getattr(args, "full", False) else \
+        slice_ids(getattr(args, "slice", None))
     if wanted is not None:
         rows = [r for r in rows if r["id"] in wanted]
         print(f"slice: {len(rows)} of {len(records)} entries", file=sys.stderr)
@@ -91,6 +100,19 @@ def step_check(args: argparse.Namespace) -> int:
         offline=args.offline,
         do_login=args.login,
     )
+
+
+def step_preview(args: argparse.Namespace) -> int:
+    """Render what would be written, as a page that looks like Wikidata."""
+    preview_step.run(
+        slice_path=args.slice,
+        vocabulary=vocabulary_step.load(args.vocabulary),
+        concordance=args.concordance or (args.out_dir / CONCORDANCE_NAME),
+        output=args.out,
+        size=args.size,
+        with_labels=args.labels,
+    )
+    return 0
 
 
 def step_reconcile(args: argparse.Namespace) -> int:
@@ -137,24 +159,25 @@ def step_push(args: argparse.Namespace) -> int:
     rows = reconcile_step.load_concordance(concordance)
     vocab = vocabulary_step.load(args.vocabulary)
 
-    wanted = slice_ids(args.slice)
+    wanted = None if args.full else slice_ids(args.slice)
     if wanted is not None:
         rows = [r for r in rows if r["id"] in wanted]
         print(f"slice: {len(rows)} rows of the concordance", file=sys.stderr)
 
-    plan_rows, skipped = push_step.plan(rows, vocab, only=args.only,
-                                        limit=args.limit)
+    plan_rows, issues = push_step.plan(rows, vocab, only=args.only,
+                                       limit=args.limit)
     if not plan_rows:
         print("nothing to do: no rows with a Q-id. Run 'reconcile' first, or "
               "add Q-ids to the concordance by hand.", file=sys.stderr)
         return 1
 
     total = sum(len(claims) for _, claims in plan_rows)
-    print(f"{len(plan_rows)} items, {total} statements, {len(skipped)} values "
-          "skipped", file=sys.stderr)
+    blocked = sum(1 for _, issue in issues if issue.severity == "blocked")
+    print(f"{len(plan_rows)} items, {total} statements, {len(issues)} issues "
+          f"({blocked} blocked)", file=sys.stderr)
 
     if not args.live:
-        push_step.show(plan_rows, skipped, show_skipped=args.show_skipped)
+        push_step.show(plan_rows, issues, show_skipped=args.show_skipped)
         print("\nDry run. Nothing was written. Re-run with --live to write.",
               file=sys.stderr)
         return 0
@@ -178,9 +201,12 @@ def _add_source(parser: argparse.ArgumentParser) -> None:
                         help="path to open-archaeo.csv (default: repository root)")
     parser.add_argument("--all-categories", action="store_true",
                         help="keep all 562 entries instead of the software subset")
-    parser.add_argument("--slice", type=Path, metavar="FILE",
-                        help="restrict to the ids listed in a slice CSV, "
-                             "e.g. out/Python/open-archaeo-software.csv")
+    parser.add_argument("--slice", type=Path, default=DEFAULT_SLICE,
+                        metavar="FILE",
+                        help="slice CSV whose ids to work on "
+                             "(default: out/Python/open-archaeo-software.csv)")
+    parser.add_argument("--full", action="store_true",
+                        help="ignore the slice and use all 416 entries")
 
 
 def _add_concordance(parser: argparse.ArgumentParser) -> None:
@@ -202,6 +228,17 @@ def add_check_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--login", action="store_true",
                         help="also authenticate and report the account's rights. "
                              "Obtains a token, makes no edit")
+
+
+def add_preview_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_concordance(parser)
+    parser.add_argument("--slice", type=Path, default=DEFAULT_SLICE,
+                        metavar="FILE",
+                        help="slice CSV to preview "
+                             "(default: out/Python/open-archaeo-software.csv)")
+    parser.add_argument("--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
+                        help="vocabulary mapping controlled values to Q-ids")
+    preview_step.add_arguments(parser)
 
 
 def add_reconcile_arguments(parser: argparse.ArgumentParser) -> None:
@@ -240,8 +277,12 @@ def add_push_arguments(parser: argparse.ArgumentParser) -> None:
                         help="set the bot flag (requires the bot right)")
     parser.add_argument("--show-skipped", type=int, default=20, metavar="N",
                         help="how many skipped values to list in a dry run")
-    parser.add_argument("--slice", type=Path, metavar="FILE",
-                        help="restrict to the ids listed in a slice CSV")
+    parser.add_argument("--slice", type=Path, default=DEFAULT_SLICE,
+                        metavar="FILE",
+                        help="slice CSV whose ids to work on "
+                             "(default: out/Python/open-archaeo-software.csv)")
+    parser.add_argument("--full", action="store_true",
+                        help="ignore the slice and use all 416 entries")
 
 
 def add_sparql_arguments(parser: argparse.ArgumentParser) -> None:
@@ -255,6 +296,7 @@ def add_sparql_arguments(parser: argparse.ArgumentParser) -> None:
 
 HANDLERS = {
     "check": (add_check_arguments, step_check),
+    "preview": (add_preview_arguments, step_preview),
     "reconcile": (add_reconcile_arguments, step_reconcile),
     "vocab": (add_vocab_arguments, step_vocab),
     "push": (add_push_arguments, step_push),

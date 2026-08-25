@@ -17,32 +17,49 @@ from model import build_claims
 
 
 def plan(rows: list[dict], vocab: dict, *, only: list[str] | None = None,
-         limit: int = 0) -> tuple[list[tuple[dict, list]], list[str]]:
-    """Build the statements for every matched row, without contacting anything."""
+         limit: int = 0) -> tuple[list[tuple[dict, list]], list]:
+    """Build the statements for every matched row, without contacting anything.
+
+    Returns the plan and the issues raised across it. Blocked issues are the
+    ones worth stopping for; see model.Issue.
+    """
     targets = [r for r in rows if r.get("qid")]
     if only:
         wanted = set(only)
         targets = [r for r in targets if r["id"] in wanted or r["qid"] in wanted]
     if limit:
         targets = targets[:limit]
-    skipped: list[str] = []
-    return [(row, build_claims(row, vocab, skipped)) for row in targets], skipped
+    plan_rows, issues = [], []
+    for row in targets:
+        claims, row_issues = build_claims(row, vocab)
+        plan_rows.append((row, claims))
+        issues.extend((row, issue) for issue in row_issues)
+    return plan_rows, issues
 
 
-def show(plan_rows: list[tuple[dict, list]], skipped: list[str],
+def show(plan_rows: list[tuple[dict, list]], issues: list,
          *, show_skipped: int = 20) -> None:
-    """Print what would be written."""
+    """Print what would be written, then what was not and why."""
     for row, claims in plan_rows:
         print(f"\n{row['qid']}  {row['name']}")
         for claim in claims:
             suffix = f"   # {claim.note}" if claim.note else ""
             print(f"    {claim}{suffix}")
-    if skipped:
-        print("\nSkipped, unresolved or out of scope:")
-        for line in skipped[:show_skipped]:
-            print(f"    {line}")
-        if len(skipped) > show_skipped:
-            print(f"    … and {len(skipped) - show_skipped} more")
+
+    blocked = [(r, i) for r, i in issues if i.severity == "blocked"]
+    deferred = [(r, i) for r, i in issues if i.severity == "deferred"]
+    for title, group in (("Blocked -- would be wrong or invalid", blocked),
+                         ("Deferred -- a value exists but is not written here",
+                          deferred)):
+        if not group:
+            continue
+        print(f"\n{title}: {len(group)}")
+        for row, issue in group[:show_skipped]:
+            detail = f" ({issue.detail})" if issue.detail else ""
+            print(f"    {row['id']} {issue.code}{detail}")
+        if len(group) > show_skipped:
+            print(f"    … and {len(group) - show_skipped} more")
+    print("\nFor a readable version of all of this, run 'preview'.")
 
 
 def write(plan_rows: list[tuple[dict, list]], *, config_path: Path,

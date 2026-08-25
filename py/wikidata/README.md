@@ -9,11 +9,23 @@ the Action API.
 
 ```
 check      →  nothing                                verify the whole route
+preview    →  docs/preview.html                      every item, as Wikidata shows it, with its problems
 reconcile  →  out/open-archaeo-concordance.csv       what already exists
 vocab      →  vocabulary.json                        what the controlled values mean
 push       →  Wikidata                               write, dry run by default
 sparql     →  docs/sparql.html                       queries that check the result
 ```
+
+## The slice
+
+Every step works on `out/Python/open-archaeo-software.csv` by default -- the
+half of the dataset this team owns during the hackathon, produced by
+`python py/main.py`. `--slice FILE` points somewhere else, `--full` uses all
+416 entries.
+
+Defaulting to the slice rather than requiring a flag is deliberate: forgetting
+`--slice` on `push --live` is the one mistake in this workflow that is awkward
+to undo, and a default cannot be forgotten.
 
 ## Start here
 
@@ -47,6 +59,7 @@ What `check` actually verifies against Wikidata:
 | File | What it is |
 |---|---|
 | `main.py` | The entry point. Nothing else is meant to be run directly except `sparql.py`. |
+| `preview.py` | Renders the planned statements as a Wikidata-looking page. |
 | `model.py` | Which identifiers are used and how a row becomes statements. Change the mapping here, nowhere else. |
 | `api.py` | HTTP, the query service, and the Action API client. |
 | `reconcile.py` | Matching and the concordance. |
@@ -59,6 +72,7 @@ What `check` actually verifies against Wikidata:
 | `config.example.ini` | Copy to `config.ini`. Only `push --live` reads it. |
 | `docs/MAPPING.md` | Why each column maps where it does. |
 | `docs/sparql.html` | Generated: the query page. |
+| `docs/preview.html` | Generated: the preview of what would be written. |
 
 `model.py` and `docs/MAPPING.md` are the same statement twice, once executable
 and once in prose. If you change one, change the other.
@@ -79,6 +93,57 @@ Verifies everything and writes nothing.
 | `--out-dir DIR` | Directory holding the concordance (default `out/`). |
 | `--vocabulary FILE` | Inspect a different vocabulary file. |
 | `--config FILE` | Credentials file to report on (default `py/wikidata/config.ini`). |
+
+### `preview`
+
+```bash
+python py/wikidata/main.py preview            # all items in the slice
+python py/wikidata/main.py preview --size 25  # one per modelling case, then fill
+python py/wikidata/main.py preview --labels   # resolve Q-ids to labels
+```
+
+Writes `docs/preview.html`: every entry in the slice with the statements it
+would produce, rendered the way Wikidata displays them -- property label and
+number on the left, value on the right, qualifiers indented under the statement
+they belong to.
+
+It shows the whole set rather than a sample, because it is a test of the
+mapping and a mapping is tested against all of the data. The filter bar is how
+you get to the interesting part: by category, by whether the item has problems,
+by a specific issue code, or by free text. The issue table in the header is
+clickable -- each row filters the page down to the items that raised it.
+
+**The three boxes under each item are the point of the page.** They answer the
+question "what does *not written* mean", which the text dry run leaves vague:
+
+| Box | Meaning |
+|---|---|
+| **Blocked**, red | The import would produce something *wrong or invalid*: a statement violating a required-qualifier constraint, an unresolved class, or an item with no Q-id at all. Gaps to close before writing. |
+| **Deferred**, amber | A value exists in open-archaeo and is deliberately not written here -- it belongs on a different statement, or the Q-id it needs has not been chosen. Nothing is wrong; something is waiting. |
+| **Notes**, grey | A remark a reviewer should see once: a description that still reads as a sentence, for instance. |
+
+Every issue carries a code, so the same taxonomy appears in `check`, in the
+`push` dry run and on this page. The codes and what each means live in
+`ISSUE_LEGEND` in `model.py`.
+
+An issue that fires on *every* item is a remark about the mapping rather than
+about any item, so it goes in the header instead -- that is where the two
+modelling decisions below are explained.
+
+| Flag | Effect |
+|---|---|
+| `--size N` | Show only N items, one per modelling case first. Default 0, meaning all. |
+| `--labels` | Read English labels for the Q-ids used. Read-only; without it the page contacts nothing. |
+| `--out FILE` | Write somewhere else. |
+| `--slice FILE`, `--concordance FILE`, `--out-dir DIR`, `--vocabulary FILE` | As above. |
+
+Run before `reconcile` and every item carries a red `not-reconciled`: honest,
+and a good picture of how much reconciliation is left. Run after, and the page
+ends with a ready command for the first three items that are reconciled *and*
+carry nothing blocked.
+
+At 208 items the page is around a megabyte. That is fine in a browser and
+awkward in a diff, so it is worth leaving out of version control.
 
 ### `reconcile`
 
@@ -196,18 +261,49 @@ verbatim to `<baseurl>/sparql.html`. Locally, `python -m http.server` inside
 `docs/` works; opening the file over `file://` does not, because the browser
 blocks the request to the endpoint.
 
+## Two modelling decisions
+
+**Exact match rather than described at URL.** The open-archaeo entry is not a
+page that mentions the tool; it is a record *of* the tool. `P2888` exact match
+carries that reading -- its `equivalent property` is `skos:exactMatch` and
+`schema:sameAs`, and its unique-value constraint matches the one-entry-one-item
+relation. `P973` described at URL is then free for blog posts and videos, which
+describe a tool without being the same thing as it.
+
+In current Wikidata practice `P2888` is used mostly for ontology alignment, so
+a registry record is a slightly unusual value for it. The semantics fit; the
+company it keeps is different. `P973` remains the fallback and loses only the
+"same thing" assertion. Better than both would be a dedicated open-archaeo
+identifier property on the `P6830` swMATH precedent.
+
+**Classification beyond the chublet class.** The chublet class and the
+WikiProject go on every item and neither says what *kind* of software it is.
+`P31` therefore takes further values: one per open-archaeo category, plus any
+superclass meant for all of them. Both are `vocabulary.json` entries starting
+at `null`, so an unresolved category shows as a blocked issue rather than as a
+quietly thinner item.
+
+If the chublet class is already a `P279` subclass of that superclass, stating
+both is redundant for a query written `wdt:P31/wdt:P279*`. Whether to state it
+anyway is a judgement about how the data will be queried, which is why it is a
+vocabulary entry rather than a hard-coded statement.
+
 ## A first session
 
 ```bash
 python py/wikidata/main.py --offline        # does the data still transform?
+python py/wikidata/main.py preview          # every item and every problem, in a browser
 python py/wikidata/main.py                  # do the identifiers still hold?
 python py/wikidata/main.py reconcile        # what is in Wikidata already?
 python py/wikidata/main.py vocab --suggest  # find candidates, choose by hand
-python py/wikidata/main.py                  # check again: the plan is now real
-python py/wikidata/main.py push             # read the dry run carefully
-python py/wikidata/main.py push --limit 3 --live   # three items, then look at them
+python py/wikidata/main.py preview --labels # look again: now with Q-ids resolved
+python py/wikidata/main.py push             # the dry run, as text
+python py/wikidata/main.py push --only <id> --only <id> --only <id> --live
 python py/wikidata/main.py sparql           # publish the queries that check it
 ```
 
-Step six is the one worth slowing down on. The dry run prints every statement
-it would make, and everything it declined to make and why.
+Steps two and six are the ones worth slowing down on, and they are the same
+step twice: once before the data is reconciled, to check the shape of the
+statements, and once after, to check the values. The page ends with the command
+for the first three ready items, which is the right size for a batch you intend
+to open in a browser afterwards.
