@@ -12,7 +12,7 @@ the archived snapshots. That is deliberate -- a random split would leave one
 team with every CRAN package and neither team seeing the whole shape of the
 problem.
 
-The mapping itself is documented once, in `py/wikidata/docs/MAPPING.md`. This
+The mapping itself is documented once, in `docs/MAPPING.md`. This
 file is about doing it in OpenRefine.
 
 ## Before anything else
@@ -189,7 +189,7 @@ WikiProject at the same time will want to tell their edits apart afterwards.
 
 ## Checking your work
 
-Open `py/wikidata/docs/sparql.html` in a browser -- it queries Wikidata live
+Open `docs/sparql.html` in a browser -- it queries Wikidata live
 and is shared with the other team. Three of its queries are worklists rather
 than reports:
 

@@ -10,6 +10,7 @@ the Action API.
 ```
 check      →  nothing                                verify the whole route
 preview    →  docs/preview.html                      every item, as Wikidata shows it, with its problems
+site       →  docs/index.html                        the landing page that links them
 reconcile  →  out/open-archaeo-concordance.csv       what already exists
 vocab      →  vocabulary.json                        what the controlled values mean
 push       →  Wikidata                               write, dry run by default
@@ -70,9 +71,8 @@ What `check` actually verifies against Wikidata:
 | `sparql.py` | Renders the query page from them. |
 | `vocabulary.json` | Generated: the registry itself, mostly `null` until filled in. |
 | `config.example.ini` | Copy to `config.ini`. Only `push --live` reads it. |
-| `docs/MAPPING.md` | Why each column maps where it does. |
-| `docs/sparql.html` | Generated: the query page. |
-| `docs/preview.html` | Generated: the preview of what would be written. |
+
+| `landing.py` | Writes `docs/index.html`. Named `landing` because `site` is a standard-library module. |
 
 `model.py` and `docs/MAPPING.md` are the same statement twice, once executable
 and once in prose. If you change one, change the other.
@@ -231,7 +231,7 @@ Two things it will not assert:
 
 | Flag | Effect |
 |---|---|
-| `--out-dir DIR` | Where to write (default `py/wikidata/docs/`). |
+| `--out-dir DIR` | Where to write (default `docs/`). |
 | `--verify` | Run every query against WDQS before writing. |
 | `--strict` | With `--verify`, fail the build on a failing query. |
 
@@ -253,13 +253,27 @@ deliberate:
 - **`queries.py`, not `queries.yaml`.** A YAML file would mean a parser
   dependency for one list of strings, and this package installs nothing.
 
-**Publishing.** GitHub Pages in this repository is driven by the Hugo workflow
-in `.github/workflows/hugo.yml`, so a `docs/` folder is not served. To publish
-through that pipeline, build into Hugo's static directory instead --
-`python py/wikidata/main.py sparql --out-dir static` -- and Hugo copies it
-verbatim to `<baseurl>/sparql.html`. Locally, `python -m http.server` inside
-`docs/` works; opening the file over `file://` does not, because the browser
-blocks the request to the endpoint.
+**Publishing.** Everything generated goes to `docs/` at the repository root,
+which is the folder GitHub Pages serves when Pages is set to *deploy from a
+branch*. As this repository stands, Pages is instead driven by
+`.github/workflows/hugo.yml`, which uploads Hugo's `./public` -- so `docs/` is
+not served until you either switch Pages to the `/docs` folder in the settings,
+or build into Hugo's static directory instead with `--out-dir static`.
+
+Locally, `python -m http.server` inside `docs/` serves both pages. Opening
+`sparql.html` over `file://` does not work, because the browser blocks the
+request to the query service; `preview.html` and `index.html` open fine either
+way.
+
+### `site`
+
+```bash
+python py/wikidata/main.py site
+```
+
+Writes `docs/index.html`, a landing page linking the two generated pages and
+the two documents. It marks anything not generated yet, so an incomplete
+`docs/` says so rather than offering dead links.
 
 ## Two modelling decisions
 
@@ -300,6 +314,7 @@ python py/wikidata/main.py preview --labels # look again: now with Q-ids resolve
 python py/wikidata/main.py push             # the dry run, as text
 python py/wikidata/main.py push --only <id> --only <id> --only <id> --live
 python py/wikidata/main.py sparql           # publish the queries that check it
+python py/wikidata/main.py site             # and the index that links them
 ```
 
 Steps two and six are the ones worth slowing down on, and they are the same

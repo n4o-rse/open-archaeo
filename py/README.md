@@ -75,14 +75,64 @@ entry point and its own README:
 
 ```bash
 python py/wikidata/main.py            # check: verifies the route, writes nothing
-python py/wikidata/main.py --list     # the five steps
+python py/wikidata/main.py preview    # docs/preview.html: the mapping, item by item
+python py/wikidata/main.py --list     # the seven steps
 ```
 
-Five steps -- `check`, `reconcile`, `vocab`, `push`, `sparql` -- producing a
-concordance of what is already in Wikidata, a registry of the controlled
-values, the writes themselves, and a query page. `check` is the default and
-does not write anywhere. See `py/wikidata/README.md` for the flags and
-`py/wikidata/docs/MAPPING.md` for the mapping itself.
+Seven steps -- `check`, `preview`, `reconcile`, `vocab`, `push`, `sparql`,
+`site` -- producing a concordance of what is already in Wikidata, a registry of
+the controlled values, the writes themselves, and the pages in `docs/`. Only
+`push --live` writes anything to Wikidata, and it needs that flag explicitly.
+
+Every step works on `out/Python/open-archaeo-software.csv` by default -- the
+half of the dataset this team owns. `--slice FILE` points elsewhere, `--full`
+uses all 416 entries.
+
+See `py/wikidata/README.md` for the flags, `docs/MAPPING.md` for the mapping
+itself, and `docs/ENRICHMENT.md` for what the CSV cannot supply.
+
+### What ends up in `docs/`
+
+`docs/` is a small generated site, not documentation kept by hand:
+
+| File | Made by | What it is |
+|---|---|---|
+| `index.html` | `main.py site` | Landing page linking the rest. |
+| `preview.html` | `main.py preview` | Every entry with the statements it would produce, and every problem the mapping raises. Filterable by category, severity and issue code. |
+| `sparql.html`, `queries/*.rq` | `main.py sparql` | Eight live queries against the Wikidata Query Service. |
+| `MAPPING.md` | by hand | Which column becomes which statement, and why. |
+| `ENRICHMENT.md` | by hand | What the columns cannot give, and which source can. |
+
+**Publishing.** GitHub Pages in this repository is currently driven by
+`.github/workflows/hugo.yml`, which uploads Hugo's `./public`. A repository-root
+`docs/` is therefore *not* served as things stand. Two ways round it:
+
+- Set Pages to **deploy from a branch**, folder `/docs`, in the repository
+  settings. Simplest, and it retires the Hugo deployment.
+- Keep Hugo and build into its static directory instead:
+  `python py/wikidata/main.py preview --out static/preview.html`, which Hugo
+  copies verbatim to `<baseurl>/preview.html`.
+
+Locally, `python -m http.server` inside `docs/` works for both pages. Opening
+`sparql.html` over `file://` does not, because the browser blocks the request
+to the query service; `preview.html` opens fine either way.
+
+At 208 items `preview.html` is around a megabyte. Fine in a browser, awkward in
+a diff -- worth deciding deliberately whether it belongs in version control.
+
+### The problems the preview reports
+
+`preview.html` groups everything the mapping could not do into three boxes, and
+the difference between them is the point:
+
+| Severity | Colour | Means |
+|---|---|---|
+| `blocked` | red | The import would produce something **wrong or invalid** -- a violated required-qualifier constraint, an unresolved class, an item with no Q-id. Close before writing. |
+| `deferred` | amber | A value exists and is deliberately not written here: it belongs on another statement, or the Q-id it needs has not been chosen. Nothing wrong; something waiting. |
+| `note` | grey | A remark to see once, such as a description that still reads as a sentence. |
+
+The same codes appear in `check` and in the `push` dry run, so the three views
+agree. They are defined once, in `ISSUE_LEGEND` in `py/wikidata/model.py`.
 
 ## Is everything usable already in the file?
 
@@ -96,7 +146,9 @@ Everything the source contains is in the file, and that has been verified. But
 | `repository` | `P1324` source code repository URL | Verified. `repository_host` can drive the `P8423` version control system qualifier -- Git for GitHub, GitLab and Codeberg; Launchpad is Bazaar; Bitbucket is ambiguous. |
 | `website` | `P856` official website | Verified. |
 | `doi` | `P356` DOI | Verified. |
-| `registry`, `publication`, `blogpost`, `youtube` | `P973` described at URL | A modelling decision, not a fact. |
+| `registry` | `P5565` CRAN project, `P5568` PyPI project | The package name sits in the URL, so an external identifier rather than a link. |
+| `url` | `P2888` exact match | The open-archaeo entry is a record *of* the tool, not a page mentioning it. |
+| `blogpost`, `youtube` | `P973` described at URL | Pages that describe without being the same thing. |
 | `internetarchive` | `P1065` archive URL | Normally a *qualifier* on `P1324` rather than a statement of its own. |
 | `name` | item label | Direct. |
 
@@ -104,10 +156,10 @@ Everything the source contains is in the file, and that has been verified. But
 
 | Column | Obstacle |
 |---|---|
-| `category` | Maps to `P31`, but the target class is a choice: software library (Q188860) for packages, application software (Q166142) for standalone software, and for scripts there is no well-established narrower class than software (Q7397). |
+| `category` | Maps to a second `P31` value, but the target class is a choice. The three categories are seeded in `vocabulary.json` as `item_class`, each `null` until someone decides; an unresolved one shows as a **blocked** issue on the preview rather than as a quietly thinner item. |
 | `platform` | Conflates three things, which is why `platform_role` exists. `language` (301 entries) maps to `P277` programmed in; `host application` (34) to `P1547` depends on software; `deployment` (8, `Mobile app` and `Web app`) is not a platform statement at all but a refinement of `P31`. Each target still needs its own item. |
-| `tags` | Maps to `P921` main subject, but the 59 vocabulary terms have to be reconciled against Wikidata items one by one. |
-| `authors` | 221 of the 283 distinct values look like forge usernames rather than personal names, and the first author matches the GitHub repository owner in 329 of 360 cases. So `P2037` GitHub username is a far more reliable reconciliation route than matching a name string to `P178` developer. |
+| `tags` | Maps to `P921` main subject, but the 56 vocabulary terms have to be reconciled against Wikidata items one by one. |
+| `authors` | 502 mentions, 283 distinct; 221 look like forge usernames rather than personal names, and **187 are demonstrably the owner of a forge URL in the same dataset**. So `P2037` GitHub username reconciles to a person or organisation item, where matching a display string reconciles to nothing. `P178` developer is therefore tractable and currently not emitted -- it is reported as `unresolved-author` so the gap stays visible. |
 | `description` | Wikidata descriptions are short, lower case and carry no terminal punctuation; these are sentences, 348 of them ending in a full stop and 413 beginning with a capital. Usable, but only after rewriting. |
 
 ### Not in open-archaeo at all
@@ -118,9 +170,18 @@ These have to come from the repositories, the registries or Software Heritage:
   should state a licence, and open-archaeo records none. This is the largest
   single gap.
 - **Inception (`P571`)** and **software version (`P348`)**.
-- **Programming language for the 73 entries with an empty `platform`.**
-- **Software Heritage identifier.** Upstream lists this as a planned addition
-  in `ToDo.md`, so it may arrive without any work on this side.
+- **Programming language for the 73 entries with an empty `platform`.** Not
+  recoverable from the text either: a dozen language patterns tested against
+  every field of those rows returned exactly one hit. The descriptions say what
+  a tool does, not what it is written in.
+- **Software Heritage identifier (`P6138`).** Upstream lists this as a planned
+  addition in `ToDo.md`, so it may arrive without any work on this side.
+
+`docs/ENRICHMENT.md` works through where each of these actually lives -- the
+GitHub API for licence, inception and archived status, CRAN `DESCRIPTION` for
+the 39 packages, Zenodo for the 24 deposits -- and the order worth doing them
+in. The short version: the columns are close to mined out, and what remains is
+behind the URLs they contain rather than inside them.
 
 `twitter` and `notes` are in the file for losslessness and are not import
 material: the former is empty throughout the subset, the latter describes the

@@ -3,7 +3,7 @@
 
 This is the single source of truth for the import, in the sense the
 wikibase-federation use cases give the term: change the mapping here, nowhere
-else. ``py/wikidata/docs/MAPPING.md`` explains *why* each column maps where it
+else. ``docs/MAPPING.md`` explains *why* each column maps where it
 does; this file is the executable form of that document.
 
 Nothing here touches the network.
@@ -192,9 +192,13 @@ class Issue:
 ISSUE_LEGEND = {
     "no-vcs-qualifier": (
         Issue.BLOCKED,
-        "P8423 is a required qualifier on P1324. A repository statement "
-        "without it violates a constraint, and the value is derivable from "
-        "the forge -- so this is a gap in the vocabulary, not in the data."),
+        "P1324 source code repository URL carries a required-qualifier "
+        "constraint for P8423 version control system: every repository "
+        "statement has to say whether the repository is Git, Mercurial, "
+        "Subversion or Bazaar. We know the answer from the host -- GitHub, "
+        "GitLab, Codeberg and Gist are all Git -- but 'Git' needs a Q-id, and "
+        "that one entry in vocabulary.json is what is missing. Resolve "
+        "version_control_system and this clears for every entry at once."),
     "unresolved-class": (
         Issue.BLOCKED,
         "The category has no Q-id yet, so the item would carry only the "
@@ -230,6 +234,13 @@ ISSUE_LEGEND = {
         "P1324 expects the item to state a licence and open-archaeo records "
         "none for any entry. It has to come from the repository, so every "
         "entry with code carries this."),
+    "unresolved-author": (
+        Issue.DEFERRED,
+        "P178 developer needs an item per person or organisation. 187 of the "
+        "283 names in open-archaeo are forge account names, so they can be "
+        "reconciled through P2037 GitHub username rather than by matching a "
+        "string -- but none has been chosen yet, so no developer statement is "
+        "made."),
     "no-repository": (
         Issue.NOTE,
         "No repository URL, so the strongest reconciliation key is missing "
@@ -421,6 +432,11 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
             claims.append(Claim(P_DEPENDS_ON, qid))
         else:
             raise_issue("unresolved-host", platform)
+
+    # Authors are entities, not a controlled vocabulary, so they are reported
+    # rather than emitted: see docs/ENRICHMENT.md for the P2037 route.
+    for author in [a for a in row["authors"].split("|") if a]:
+        raise_issue("unresolved-author", author)
 
     for tag in [t for t in row["tags"].split("|") if t]:
         qid = vocabulary.get("tag", {}).get(tag)

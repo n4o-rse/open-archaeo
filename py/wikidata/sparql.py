@@ -27,7 +27,8 @@ from pathlib import Path
 import queries as query_source
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUT_DIR = HERE / "docs"
+ROOT = HERE.parent.parent
+DEFAULT_OUT_DIR = ROOT / "docs"
 
 # Pinned deliberately: an unpinned endpoint is not a thing, but an unpinned
 # result limit is -- some of these queries are unbounded and an unlimited table

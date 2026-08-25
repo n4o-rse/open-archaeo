@@ -7,6 +7,7 @@
     python py/wikidata/main.py vocab --suggest # resolve the controlled values
     python py/wikidata/main.py push            # dry run; --live to write
     python py/wikidata/main.py sparql          # build docs/sparql.html
+    python py/wikidata/main.py site            # build docs/index.html
 
 ``check`` is the default because the expensive way to discover that a property
 changed datatype, or that a Q-id does not exist, is halfway through a batch of
@@ -37,6 +38,8 @@ import check as check_step            # noqa: E402
 import preview as preview_step        # noqa: E402
 import push as push_step              # noqa: E402
 import reconcile as reconcile_step    # noqa: E402
+# 'site' is a standard-library module name, so the module is 'landing'.
+import landing as landing_step        # noqa: E402
 import sparql as sparql_step          # noqa: E402
 import vocabulary as vocabulary_step  # noqa: E402
 from reconcile import CONCORDANCE_NAME  # noqa: E402
@@ -44,14 +47,14 @@ from transform import (                # noqa: E402
     DEFAULT_CSV, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
-STEPS = ["check", "preview", "reconcile", "vocab", "push", "sparql"]
+STEPS = ["check", "preview", "reconcile", "vocab", "push", "sparql", "site"]
 
 DEFAULT_OUT_DIR = ROOT / "out"
 # The half of the dataset this team owns. See out/Python/README.md.
 DEFAULT_SLICE = ROOT / "out" / "Python" / "open-archaeo-software.csv"
 DEFAULT_CONFIG = HERE / "config.ini"
 DEFAULT_VOCABULARY = HERE / "vocabulary.json"
-DEFAULT_DOCS = HERE / "docs"
+DEFAULT_DOCS = ROOT / "docs"
 
 
 def slice_ids(path: Path | None) -> set[str] | None:
@@ -186,6 +189,12 @@ def step_push(args: argparse.Namespace) -> int:
                                 mark_bot=args.mark_bot) else 0
 
 
+def step_site(args: argparse.Namespace) -> int:
+    """Write docs/index.html, the landing page for GitHub Pages."""
+    landing_step.run(args.out_dir)
+    return 0
+
+
 def step_sparql(args: argparse.Namespace) -> int:
     """Build the query page and the .rq files from queries.py."""
     sparql_step.run(args.out_dir, do_verify=args.verify, strict=args.strict)
@@ -287,7 +296,7 @@ def add_push_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_sparql_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_DOCS,
-                        help="where to write the page (default: py/wikidata/docs/)")
+                        help="where to write the page (default: docs/)")
     parser.add_argument("--verify", action="store_true",
                         help="run every query against WDQS before writing")
     parser.add_argument("--strict", action="store_true",
@@ -301,6 +310,7 @@ HANDLERS = {
     "vocab": (add_vocab_arguments, step_vocab),
     "push": (add_push_arguments, step_push),
     "sparql": (add_sparql_arguments, step_sparql),
+    "site": (landing_step.add_arguments, step_site),
 }
 
 

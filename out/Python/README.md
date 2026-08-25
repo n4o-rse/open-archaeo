@@ -13,7 +13,7 @@ the archived snapshots. That is deliberate -- a random split would leave one
 team with every CRAN package and neither team seeing the whole shape of the
 problem.
 
-The mapping itself is documented once, in `py/wikidata/docs/MAPPING.md`, and
+The mapping itself is documented once, in `docs/MAPPING.md`, and
 every step and flag in `py/wikidata/README.md`. This file is about working on
 this slice in particular.
 
@@ -50,7 +50,7 @@ a default cannot be forgotten.
 python py/wikidata/main.py preview
 ```
 
-Writes `py/wikidata/docs/preview.html` -- **all 208** of your entries with the
+Writes `docs/preview.html` -- **all 208** of your entries with the
 statements they would produce, laid out the way Wikidata lays out statements.
 Open it in a browser. It is the test of the mapping, which is why it shows
 everything rather than a sample.
@@ -164,7 +164,7 @@ Worth running once at the start of the day.
 
 ## Checking your work
 
-Open `py/wikidata/docs/sparql.html` in a browser -- it queries Wikidata live
+Open `docs/sparql.html` in a browser -- it queries Wikidata live
 and is shared with the other team. Three of its queries are worklists rather
 than reports:
 

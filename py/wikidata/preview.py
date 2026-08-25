@@ -35,7 +35,9 @@ from model import (
 )
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUTPUT = HERE / "docs" / "preview.html"
+ROOT = HERE.parent.parent
+# Repo-root docs/, so GitHub Pages can serve it. See docs/index.html.
+DEFAULT_OUTPUT = ROOT / "docs" / "preview.html"
 
 WIKIDATA_ENTITY = "https://www.wikidata.org/wiki/{}"
 WIKIDATA_PROPERTY = "https://www.wikidata.org/wiki/Property:{}"
@@ -695,7 +697,7 @@ def run(*, slice_path: Path, vocabulary: dict, concordance: Path,
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTPUT,
                         help="where to write the page "
-                             "(default: py/wikidata/docs/preview.html)")
+                             "(default: docs/preview.html)")
     parser.add_argument("--size", type=int, default=0, metavar="N",
                         help="show only N items, one per modelling case first "
                              "(default: 0, meaning all of them)")
