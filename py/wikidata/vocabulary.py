@@ -12,6 +12,7 @@ candidate and a bad way to choose one.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -98,6 +99,39 @@ def suggest(vocabulary: dict, *, limit: int = 3) -> None:
                       f"{hit.get('description', '')}")
             if not hits:
                 print("    (no hits)")
+
+
+def resolve(vocabulary: dict, assignments: list[list[str]]) -> int:
+    """Set ``SECTION VALUE QID`` triples in the registry.
+
+    Editing the JSON by hand works too, but one wrong bracket makes every step
+    fail with a parse error rather than with the thing you got wrong. This
+    validates instead: the section has to exist, the value has to be one the
+    data actually contains, and the Q-id has to look like one.
+    """
+    applied = 0
+    for section, value, qid in assignments:
+        if section not in vocabulary:
+            print(f"  no such section: {section} -- try one of "
+                  f"{', '.join(sorted(k for k in vocabulary if not k.startswith('_')))}",
+                  file=sys.stderr)
+            continue
+        if value not in vocabulary[section]:
+            near = [k for k in vocabulary[section] if k.lower() == value.lower()]
+            if near:
+                value = near[0]
+            else:
+                print(f"  not a value in {section}: {value}", file=sys.stderr)
+                continue
+        if not re.fullmatch(r"Q\d+", qid):
+            print(f"  not a Q-id: {qid}", file=sys.stderr)
+            continue
+        previous = vocabulary[section][value]
+        vocabulary[section][value] = qid
+        note = f" (was {previous})" if previous and previous != qid else ""
+        print(f"  {section}/{value} = {qid}{note}", file=sys.stderr)
+        applied += 1
+    return applied
 
 
 def load(path: Path = DEFAULT_PATH) -> dict:

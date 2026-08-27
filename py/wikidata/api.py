@@ -124,6 +124,52 @@ def value_payload(value, datatype: str):
     return value  # url, string and external-id are plain strings
 
 
+# The entity JSON wbeditentity takes wants the datavalue *type*, which is not
+# the property datatype: a url and an external-id are both carried as "string".
+DATAVALUE_TYPES = {"item": "wikibase-entityid", "time": "time"}
+
+
+def datavalue(value, datatype: str) -> dict:
+    """One datavalue, as wbeditentity wants it inside an entity document."""
+    kind = DATAVALUE_TYPES.get(datatype, "string")
+    if datatype.startswith("monolingual"):
+        kind = "monolingualtext"
+    return {"value": value_payload(value, datatype), "type": kind}
+
+
+def claim_document(claim) -> dict:
+    """One statement with its qualifiers, as part of an entity document."""
+    statement = {
+        "mainsnak": {"snaktype": "value", "property": claim.prop,
+                     "datavalue": datavalue(claim.value, claim.datatype)},
+        "type": "statement", "rank": "normal",
+    }
+    if claim.qualifiers:
+        qualifiers: dict[str, list] = {}
+        for qualifier in claim.qualifiers:
+            qualifiers.setdefault(qualifier.prop, []).append({
+                "snaktype": "value", "property": qualifier.prop,
+                "datavalue": datavalue(qualifier.value, qualifier.datatype)})
+        statement["qualifiers"] = qualifiers
+    return statement
+
+
+def entity_document(label: str, description: str, claims: list) -> dict:
+    """A whole new item: label, description and every statement at once.
+
+    One edit rather than one per statement. That matters beyond speed: an item
+    that is created and then has its class added in a second call exists, for a
+    moment, as an untyped item with a name -- and if the run dies in between, it
+    stays that way.
+    """
+    document = {"labels": {"en": {"language": "en", "value": label}},
+                "claims": [claim_document(c) for c in claims]}
+    if description:
+        document["descriptions"] = {"en": {"language": "en",
+                                           "value": description}}
+    return document
+
+
 class WikidataClient:
     """Login, tokens, and the two write calls.
 
@@ -231,6 +277,22 @@ class WikidataClient:
                 time.sleep(self.throttle)
             return result["claim"]["id"]
         raise WikidataError("wbcreateclaim: retries exhausted")
+
+    def create_item(self, label: str, description: str, claims: list) -> str:
+        """Create an item and return its Q-id. The one call here that writes
+        something that did not exist before, so it is deliberately separate
+        from create_claim rather than a mode of it.
+        """
+        result = self.call({
+            "action": "wbeditentity", "new": "item",
+            "data": json.dumps(entity_document(label, description, claims),
+                               ensure_ascii=False),
+            "token": self.csrf(), "assert": "user",
+            "summary": "create item from open-archaeo",
+            **({"bot": "1"} if self.mark_bot else {})}, post=True)
+        if self.throttle:
+            time.sleep(self.throttle)
+        return result["entity"]["id"]
 
     def add_qualifier(self, claim_id: str, qualifier) -> None:
         self.call({

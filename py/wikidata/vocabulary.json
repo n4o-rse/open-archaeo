@@ -10,7 +10,7 @@
     "superclass": "further P31 values applied to every item"
   },
   "version_control_system": {
-    "Git": null
+    "Git": "Q186055"
   },
   "programming_language": {
     "Java": null,
@@ -89,11 +89,11 @@
     "Zooarchaeology": null
   },
   "item_class": {
-    "Packages and libraries": null,
-    "Scripts": null,
-    "Standalone software": null
+    "Packages and libraries": "Q188860",
+    "Scripts": "Q1070421",
+    "Standalone software": "Q166142"
   },
   "superclass": {
-    "research software": null
+    "research software": "Q95001953"
   }
 }

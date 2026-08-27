@@ -38,6 +38,7 @@ sys.path.insert(0, str(HERE))      # this folder, when run from elsewhere
 sys.path.insert(0, str(PACKAGE_DIR))  # for transform.py
 
 from api import WikidataError          # noqa: E402
+import categories as categories_step  # noqa: E402
 import check as check_step            # noqa: E402
 import labels as label_cache          # noqa: E402
 import preview as preview_step        # noqa: E402
@@ -55,8 +56,8 @@ from transform import (                # noqa: E402
     DEFAULT_CSV, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
-STEPS = ["all", "check", "preview", "reconcile", "vocab", "subjects", "push",
-         "sparql", "site"]
+STEPS = ["all", "check", "preview", "reconcile", "vocab", "categories",
+         "subjects", "push", "sparql", "site"]
 
 # What ``all`` runs, in order, and whether the step needs a connection.
 #
@@ -69,6 +70,7 @@ STEPS = ["all", "check", "preview", "reconcile", "vocab", "subjects", "push",
 ALL_STEPS = [
     ("transform", False, "rebuild out/ from open-archaeo.csv"),
     ("vocab", False, "collect the controlled values"),
+    ("categories", False, "build the P31 class worksheet"),
     ("subjects", False, "build the P921 worksheet"),
     ("check", True, "verify the whole route"),
     ("preview", False, "render every item, with labels"),
@@ -175,6 +177,8 @@ def step_vocab(args: argparse.Namespace) -> int:
     vocab = vocabulary_step.scaffold(source_rows(args))
     if args.path.is_file():
         vocab = vocabulary_step.merge(vocab, vocabulary_step.load(args.path))
+    if args.set:
+        vocabulary_step.resolve(vocab, args.set)
     if args.suggest:
         vocabulary_step.suggest(vocab)
     vocabulary_step.save(vocab, args.path)
@@ -204,16 +208,54 @@ def step_subjects(args: argparse.Namespace) -> int:
     return 0
 
 
+def step_categories(args: argparse.Namespace) -> int:
+    """Build the P31 class worksheet, or read a filled one back."""
+    if args.verify:
+        return 1 if categories_step.verify_worksheet(
+            categories_step.read_worksheet(args.out)) else 0
+    if args.apply:
+        categories_step.apply_worksheet(args.out, args.vocabulary)
+        return 0
+    # Deliberately not sliced and not limited to the software subset: the
+    # categories belong to open-archaeo as a whole, and deciding them together
+    # keeps one term from acquiring two Q-ids.
+    records = load(args.csv)
+    software = [simplify(r) for r in records
+                if r["category"] in set(SOFTWARE_CATEGORIES)]
+    everything = [simplify(r) for r in records]
+    categories_step.run(software, output=args.out, suggest=args.suggest,
+                        all_rows=everything)
+    return 0
+
+
 def step_push(args: argparse.Namespace) -> int:
     """Write statements to Wikidata. Dry run unless --live."""
     concordance = args.concordance or (args.out_dir / CONCORDANCE_NAME)
-    rows = reconcile_step.load_concordance(concordance)
     vocab = vocabulary_step.load(args.vocabulary)
+
+    if args.create and not concordance.is_file():
+        # Creating is the one mode that works without a concordance, and it has
+        # to: an entry with no Q-id anywhere is exactly what it is for, and
+        # requiring 'reconcile' first would make the slow step a precondition of
+        # the step that does not need it. The rows come from the table instead,
+        # with the concordance columns empty, and the file is written when the
+        # items exist.
+        print(f"no concordance at {concordance} -- creating from the table; "
+              "every entry counts as not yet in Wikidata", file=sys.stderr)
+        rows = source_rows(args)
+        for row in rows:
+            row.update({key: "" for key in reconcile_step.CONCORDANCE_EXTRA})
+        return _create_items(args, rows, vocab)
+
+    rows = reconcile_step.load_concordance(concordance)
 
     wanted = None if args.full else slice_ids(args.slice)
     if wanted is not None:
         rows = [r for r in rows if r["id"] in wanted]
         print(f"slice: {len(rows)} rows of the concordance", file=sys.stderr)
+
+    if args.create:
+        return _create_items(args, rows, vocab)
 
     plan_rows, issues = push_step.plan(rows, vocab, only=args.only,
                                        limit=args.limit)
@@ -235,6 +277,56 @@ def step_push(args: argparse.Namespace) -> int:
 
     return 1 if push_step.write(plan_rows, config_path=args.config,
                                 mark_bot=args.mark_bot) else 0
+
+
+def _create_items(args: argparse.Namespace, rows: list[dict],
+                  vocab: dict) -> int:
+    """push --create: make an item for every row that has no Q-id.
+
+    The concordance is rewritten afterwards, always -- a created item whose
+    Q-id is not recorded is a duplicate waiting to be made on the next run.
+    """
+    creations, issues = push_step.plan_creations(
+        rows, vocab, only=args.only, limit=args.limit)
+    if not creations:
+        print("nothing to create: every row already has a Q-id.",
+              file=sys.stderr)
+        return 0
+
+    stopped = push_step.blocking(issues)
+    print(f"{len(creations)} items to create, "
+          f"{sum(len(c) for _, c, _ in creations)} statements, "
+          f"{len(stopped)} blocked", file=sys.stderr)
+
+    if not args.live:
+        push_step.show_creations(creations, issues,
+                                 show_skipped=args.show_skipped)
+        print("\nDry run. Nothing was created. Re-run with --live to create.",
+              file=sys.stderr)
+        return 0
+
+    if stopped:
+        codes = sorted({issue.code for _, issue in stopped})
+        sys.exit("error: refusing to create while blocked issues stand: "
+                 + ", ".join(codes)
+                 + ".\nAn item created wrong has to be found again before it "
+                   "can be fixed. Run 'categories --suggest', fill the qid "
+                   "column, then 'categories --apply'.")
+
+    unchecked = [r for r, _, _ in creations if not r.get("checked")]
+    if unchecked:
+        print(f"warning: {len(unchecked)} of these have never been reconciled. "
+              "Every one that already exists in Wikidata becomes a duplicate "
+              "somebody has to merge.", file=sys.stderr)
+
+    created, failed = push_step.create(creations, config_path=args.config,
+                                       mark_bot=args.mark_bot)
+    concordance = args.concordance or (args.out_dir / CONCORDANCE_NAME)
+    columns = list(rows[0]) if rows else []
+    concordance.write_text(to_csv(rows, columns) + "\n", encoding="utf-8")
+    print(f"{created} created, {failed} failed -> {concordance}",
+          file=sys.stderr)
+    return 1 if failed else 0
 
 
 def step_site(args: argparse.Namespace) -> int:
@@ -401,6 +493,11 @@ def add_vocab_arguments(parser: argparse.ArgumentParser) -> None:
     _add_source(parser)
     parser.add_argument("--path", type=Path, default=DEFAULT_VOCABULARY,
                         help="vocabulary file to create or update")
+    parser.add_argument("--set", action="append", nargs=3, default=[],
+                        metavar=("SECTION", "VALUE", "QID"),
+                        help="resolve one controlled value, e.g. "
+                             "--set version_control_system Git Q186055. "
+                             "Repeatable")
     parser.add_argument("--suggest", action="store_true",
                         help="print Wikidata search hits for unresolved values. "
                              "Never writes a Q-id")
@@ -417,12 +514,21 @@ def add_subjects_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_push_arguments(parser: argparse.ArgumentParser) -> None:
     _add_concordance(parser)
+    parser.add_argument("--csv", type=Path, default=DEFAULT_CSV,
+                        help="path to open-archaeo.csv, read by --create when "
+                             "there is no concordance yet")
+    parser.add_argument("--all-categories", action="store_true",
+                        help="keep all 562 entries instead of the software subset")
     parser.add_argument("--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
                         help="vocabulary mapping controlled values to Q-ids")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                         help="credentials file (default: py/wikidata/config.ini)")
     parser.add_argument("--live", action="store_true",
                         help="actually write. Without this nothing leaves the machine")
+    parser.add_argument("--create", action="store_true",
+                        help="create an item for every row that has no Q-id, "
+                             "instead of adding statements to matched ones. "
+                             "Refuses while any other blocked issue stands")
     parser.add_argument("--limit", type=int, default=0, metavar="N",
                         help="only the first N items (0 = all)")
     parser.add_argument("--only", action="append", metavar="ID",
@@ -437,6 +543,15 @@ def add_push_arguments(parser: argparse.ArgumentParser) -> None:
                              "(default: out/Python/open-archaeo-software.csv)")
     parser.add_argument("--full", action="store_true",
                         help="ignore the slice and use all 416 entries")
+
+
+def add_categories_arguments(parser: argparse.ArgumentParser) -> None:
+    # No --slice and no --full: see step_categories.
+    parser.add_argument("--csv", type=Path, default=DEFAULT_CSV,
+                        help="path to open-archaeo.csv")
+    parser.add_argument("--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
+                        help="vocabulary file that --apply writes into")
+    categories_step.add_arguments(parser)
 
 
 def add_sparql_arguments(parser: argparse.ArgumentParser) -> None:
@@ -472,6 +587,7 @@ HANDLERS = {
     "preview": (add_preview_arguments, step_preview),
     "reconcile": (add_reconcile_arguments, step_reconcile),
     "vocab": (add_vocab_arguments, step_vocab),
+    "categories": (add_categories_arguments, step_categories),
     "subjects": (add_subjects_arguments, step_subjects),
     "push": (add_push_arguments, step_push),
     "sparql": (add_sparql_arguments, step_sparql),

@@ -48,14 +48,14 @@ register Y*, and it borrows no semantics it does not mean.
 | `pypi` | 1 | `P5568` PyPI project | -- | verified |
 | `internetarchive` | 222 | `P1065` archive URL | `P2960` archive date | verified, as qualifier |
 | `publication` | 25 | `P1343` described by source | item, not URL -- see below | decision |
-| `category` | 416 | `P31` instance of | -- | decision, see below |
+| `category` | 416 | `P31` instance of | -- | decision, one Q-id per value: `out/category-reconciliation.csv` |
 | `platform` (`language`) | 301 | `P277` programmed in | -- | verified property, derived value |
 | `platform` (`host application`) | 34 | `P1547` depends on software | -- | verified property, derived value |
 | `platform` (`deployment`) | 8 | refines `P31` | -- | decision |
 | `tags` | 416 | `P921` main subject | -- | needs 59 reconciliations |
 | `authors` | 416 | `P178` developer | `P1545` series ordinal | see below |
 | `name` | 416 | label **and** `P2561` name | -- | verified |
-| `description` | 416 | item description | -- | needs rewriting |
+| `description` | 416 | -- | -- | not imported: an item description is generated from `category` and `platform` instead |
 | `blogpost`, `youtube` | 4 | `P973` described at URL | -- | decision |
 | `slug` | 416 | `P217` inventory number | `P195` **required** | decision, see above |
 | `url` (open-archaeo page) | 416 | `P2888` exact match | -- | derived from `slug` |

@@ -252,13 +252,82 @@ the other: 79 values across five sections, each `null` until someone fills it in
 | Flag | Effect |
 |---|---|
 | `--suggest` | Print Wikidata search hits for every unresolved value. **Never writes a Q-id.** |
+| `--set SECTION VALUE QID` | Resolve one value, e.g. `--set version_control_system Git Q186055`. Repeatable. |
 | `--path FILE` | Create or update a different vocabulary file. |
 | `--csv PATH`, `--all-categories` | As above. |
+
+`--set` exists because editing the JSON by hand works right up until it does
+not: one wrong bracket and every step fails with a parse error rather than with
+the thing you actually got wrong. It checks that the section exists, that the
+value is one the data contains, and that the Q-id looks like a Q-id, and says
+which of the three failed.
 
 Label search is a good way to find a candidate and a bad way to choose one, so
 the choice stays with a person. `push` skips a statement whose value is
 unresolved rather than guessing: an invented Q-id is a wrong statement that
 looks like a right one.
+
+### `categories`
+
+```bash
+python py/wikidata/main.py categories            # write out/category-reconciliation.csv
+python py/wikidata/main.py categories --suggest  # with Wikidata candidates
+python py/wikidata/main.py categories --verify   # is the Q-id you chose the right one?
+python py/wikidata/main.py categories --apply    # read a filled one back
+```
+
+`unresolved-class` blocks every single item: the chublet class says an item
+belongs to this effort and nothing says what kind of software it is. The
+category column knows -- but *Packages and libraries* is open-archaeo's phrase,
+not a Wikidata item, and choosing the item is a judgement. Seven values, eight
+rows with the superclass, and one column to fill.
+
+| Column | What it is |
+|---|---|
+| `section` | `item_class` or `superclass` -- which part of `vocabulary.json` `--apply` writes it into. |
+| `value` | The category as it appears in open-archaeo. |
+| `kind` | `software` for the three this import writes, `other` for the rest, `every item` for a superclass. |
+| `uses_software` | How many of the 416 software entries carry it. |
+| `uses_all` | How many of all 562 do. |
+| `examples` | Three tools, for sanity. |
+| `search_term` | What to search Wikidata for, where that differs from the phrase. Editable. |
+| `qid` | **The column you fill.** |
+| `qid_label` | Search hits from `--suggest`. Never decides. |
+| `note` | What the decision actually is. open-archaeo defines its categories nowhere, so these notes are the closest thing to a scope note there is. |
+
+**Not sliced, and not limited to the software subset.** *Guides* and *Lists and
+datasets* describe entries this import does not touch yet, but they will be the
+same items when it does, and deciding them together is what keeps one term from
+acquiring two Q-ids. `--apply` writes only the three software categories into
+`item_class`; the others are recorded and reported as deferred.
+
+**What `--verify` cannot do is read.** It checks the *shape* of a choice --
+that the item is a class, that other items use it, that it is not an article
+with a matching title. Whether the class means what the category means is still
+yours to judge, and a plausible `ok` is not agreement: `product` in the sense
+of a chemical reaction is a perfectly well-formed class with real usage, and
+entirely the wrong item for a register of software.
+
+**`--verify` is how you say yes.** A search hit only tells you an item exists
+whose label matches; the question is whether it is a *class that software items
+are already instances of*. For every filled `qid` the step reports what the
+item says it is, whether it is a class at all, and how many items use it as a
+`P31` value -- then flags the three ways a choice goes wrong: an item that is a
+scholarly article or a patent with a matching title, an item that is neither a
+subclass of anything nor ever stated, and a class with fewer than five uses,
+which is usually either the wrong one or a duplicate of the right one. A class
+in real use beats a technically defensible one nobody states: the point of the
+statement is to put these tools where people looking for tools will find them.
+
+Fill `qid` with the bare Q-number -- `Q188860`, not the whole candidate line.
+`qid_label` is a suggestion column and `--apply` never reads it.
+
+**The superclass row is a modelling question, not a lookup.** The chublet class
+is documented as a subclass of `Q73899440`. If that `P279` holds, stating the
+superclass on every item as well is redundant for any query written
+`wdt:P31/wdt:P279*`. Leaving the `qid` empty states only the chublet class;
+filling it states both. That is why it is a row in a sheet rather than a
+constant in `model.py`.
 
 ### `subjects`
 
@@ -328,6 +397,7 @@ dating, calibration and sequencing* the two are nearly the same claim; for
 | Flag | Effect |
 |---|---|
 | `--live` | **Actually write.** Without it nothing leaves the machine. |
+| `--create` | Create an item for every row with no Q-id, instead of adding statements to matched ones. |
 | `--limit N` | Only the first N items. |
 | `--only ID` | Only this open-archaeo id or Q-id. Repeatable. |
 | `--mark-bot` | Set the bot flag. Requires the bot right -- `check --login` reports whether the account has it. |
@@ -340,10 +410,46 @@ User-Agent with a contact address in `config.ini`, and read the bot policy
 before doing more than a handful of items at a time. `push` refuses to start
 while the User-Agent still carries its placeholder.
 
-Only rows that already have a `qid` are touched. **The step never creates
-items** -- deciding that a tool is missing from Wikidata is a judgement call,
-and one worth making in front of the search results rather than in a batch of
-416. Statements that already exist are skipped, so re-running is safe.
+Without `--create`, only rows that already have a `qid` are touched, and
+statements that already exist are skipped, so re-running is safe.
+
+#### `push --create`
+
+Creates an item for every row that has no Q-id: label from `name`, a generated
+description, and every statement at once in a single `wbeditentity` call.
+
+**It works without a concordance**, and it has to: an entry with no Q-id
+anywhere is exactly what this mode is for, so requiring `reconcile` first would
+make the slow step a precondition of the step that does not need it. With no
+concordance file the rows come from the table and every entry counts as not yet
+in Wikidata; the file is written once the items exist. The
+new Q-id is written back into the concordance immediately -- a created item
+whose Q-id is not recorded is a duplicate waiting to be made on the next run.
+
+It is a separate mode and not the default because it is the only thing in this
+package that cannot be undone by editing. A wrong statement can be removed; a
+duplicate item has to be *merged*, by a person, and merging is exactly the work
+that different spellings of the same tool make hard.
+
+Two rails, both deliberate:
+
+- **It refuses while any other blocked issue stands.** `not-reconciled` is
+  exempt -- that is the issue creation answers. Everything else means the item
+  would be created in a state the preview already calls wrong, and a wrong new
+  item has to be found again before it can be fixed. In practice this means
+  `categories --apply` comes first.
+- **It warns for every row that has never been reconciled.** Creating without
+  looking is how duplicates are made. The warning does not stop the run: with
+  the identity block in place, a duplicate is at least *findable* afterwards --
+  `P217` in collection `Q141190255` is a key nothing else in Wikidata uses, so
+  the merge candidates can be listed rather than hunted.
+
+The description is generated rather than taken from open-archaeo: `R package
+for archaeology`, `software for archaeology, for Blender`. The register's own
+description is a sentence, sentence-cased, median 93 characters, and it
+summarises -- a Wikidata description disambiguates instead, in a few lower-case
+words with no full stop. A category with no template gets no description rather
+than a guessed one, and the dry run says which those are.
 
 Two things it will not assert:
 
@@ -453,6 +559,7 @@ python py/wikidata/main.py preview          # every item and every problem, in a
 python py/wikidata/main.py                  # do the identifiers still hold?
 python py/wikidata/main.py reconcile        # what is in Wikidata already?
 python py/wikidata/main.py vocab --suggest  # find candidates, choose by hand
+python py/wikidata/main.py categories --suggest  # the seven classes, then --apply
 python py/wikidata/main.py subjects         # the 56 subject terms, with their definitions
 python py/wikidata/main.py preview --labels # look again: now with Q-ids resolved
 python py/wikidata/main.py push             # the dry run, as text

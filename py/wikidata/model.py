@@ -406,6 +406,44 @@ def repository_variants(url: str) -> list[str]:
     return sorted(variants)
 
 
+# A new item needs a description, and open-archaeo's own is the wrong text for
+# the job: it is a sentence, sentence-cased, median 93 characters, and it
+# summarises. A Wikidata description does not summarise -- it disambiguates,
+# in a few lower-case words with no full stop. So the description is generated
+# from the two columns that actually distinguish one entry from another, and
+# the open-archaeo sentence stays where it is, in the register.
+DESCRIPTION_NOUNS = {
+    "Packages and libraries": ("{lang} package", "software package"),
+    "Standalone software": ("{lang} software", "software"),
+    "Scripts": ("{lang} script", "script"),
+}
+DESCRIPTION_DOMAIN = "for archaeology"
+DESCRIPTION_LIMIT = 250  # Wikidata's own
+
+
+def description_for(row: dict) -> str:
+    """A short English description for an item that does not exist yet.
+
+    ``R package for archaeology``, ``software for archaeology, for Blender``.
+    Returns an empty string for a category with no template, rather than
+    guessing: an item created with a wrong description is worse than one
+    created with none.
+    """
+    with_language, plain = DESCRIPTION_NOUNS.get(row.get("category", ""),
+                                                 ("", ""))
+    if not plain:
+        return ""
+    role, platform = row.get("platform_role", ""), row.get("platform", "")
+    if platform and role == "language":
+        noun = with_language.format(lang=platform)
+    else:
+        noun = plain
+    text = f"{noun} {DESCRIPTION_DOMAIN}"
+    if platform and role == "host application":
+        text += f", for {platform}"
+    return text[:DESCRIPTION_LIMIT]
+
+
 def slug_claims(slug: str) -> list[Claim]:
     """The two statements that carry the open-archaeo slug.
 
