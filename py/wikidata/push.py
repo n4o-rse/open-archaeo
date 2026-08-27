@@ -25,7 +25,7 @@ from model import build_claims, description_for
 # reason not to. Every other blocked issue means the item would be created
 # wrong, and a wrong new item is worse than no item: it has to be found again
 # before it can be fixed.
-CREATION_EXEMPT = {"not-reconciled"}
+CREATION_EXEMPT = {"to-be-created"}
 
 
 def plan(rows: list[dict], vocab: dict, *, only: list[str] | None = None,

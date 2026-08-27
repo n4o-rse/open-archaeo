@@ -185,10 +185,11 @@ modelling decisions below are explained.
 | `--out FILE` | Write somewhere else. |
 | `--slice FILE`, `--concordance FILE`, `--out-dir DIR`, `--vocabulary FILE` | As above. |
 
-Run before `reconcile` and every item carries a red `not-reconciled`: honest,
-and a good picture of how much reconciliation is left. Run after, and the page
-ends with a ready command for the first three items that are reconciled *and*
-carry nothing blocked.
+Run before `reconcile` and every item carries a grey `to-be-created`: honest,
+and a good picture of how many items this import would add rather than extend.
+It is a note and not a blocker, because creating the item is the plan -- the
+page ends each such entry with the `push --create --only … --live` that would
+make it.
 
 At 208 items the page is around a megabyte. That is fine in a browser and
 awkward in a diff, so it is worth leaving out of version control.
@@ -398,6 +399,7 @@ dating, calibration and sequencing* the two are nearly the same claim; for
 |---|---|
 | `--live` | **Actually write.** Without it nothing leaves the machine. |
 | `--create` | Create an item for every row with no Q-id, instead of adding statements to matched ones. |
+| `--skip-blocked` | With `--create`, leave out the items that carry a blocked issue and create the rest. |
 | `--limit N` | Only the first N items. |
 | `--only ID` | Only this open-archaeo id or Q-id. Repeatable. |
 | `--mark-bot` | Set the bot flag. Requires the bot right -- `check --login` reports whether the account has it. |
@@ -433,11 +435,18 @@ that different spellings of the same tool make hard.
 
 Two rails, both deliberate:
 
-- **It refuses while any other blocked issue stands.** `not-reconciled` is
-  exempt -- that is the issue creation answers. Everything else means the item
+- **It refuses while any other blocked issue stands.** `to-be-created` is
+  exempt -- that is the issue creation answers, and it is a note rather than a
+  blocker for the same reason. Everything else means the item
   would be created in a state the preview already calls wrong, and a wrong new
   item has to be found again before it can be fixed. In practice this means
   `categories --apply` comes first.
+
+  The gate is per batch, which is the safe default and occasionally the wrong
+  one: a single Bitbucket repository -- ambiguous between Git and Mercurial, so
+  its `P8423` cannot be derived -- is enough to hold up two hundred sound
+  items. `--skip-blocked` makes it per item instead, creating the rest and
+  naming what it left behind, since those are work rather than noise.
 - **It warns for every row that has never been reconciled.** Creating without
   looking is how duplicates are made. The warning does not stop the run: with
   the identity block in place, a duplicate is at least *findable* afterwards --

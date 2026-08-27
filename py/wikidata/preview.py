@@ -364,8 +364,9 @@ def render_item(row: dict, claims: list, issues: list,
                 f'{html.escape(qid)}</a>'
                 f'<span class="badge badge-matched">reconciled</span>')
     else:
-        head = ('Item: not reconciled'
-                '<span class="badge badge-unmatched">push would skip this</span>')
+        head = ('Item: not in Wikidata'
+                '<span class="badge badge-unmatched">push --create would '
+                'create it</span>')
 
     cases = cases_for(row)
     chips = ""
@@ -387,9 +388,8 @@ def render_item(row: dict, claims: list, issues: list,
         command = (f'<div class="command">python py/wikidata/main.py push '
                    f'--only {html.escape(row["id"])} --live</div>')
     else:
-        command = ('<div class="note">No Q-id, so <code>push</code> would skip '
-                   'this item. Reconcile it first, or add a Q-id to the '
-                   'concordance by hand.</div>')
+        command = ('<div class="command">python py/wikidata/main.py push '
+                   '--create --only ' + html.escape(row["id"]) + ' --live</div>')
 
     codes = " ".join(sorted({i.code for i in issues}))
     severities = " ".join(sorted({i.severity for i in issues})) or "clean"
@@ -659,8 +659,8 @@ def run(*, slice_path: Path, vocabulary: dict, concordance: Path,
     for row in choose_sample(rows, size):
         claims, issues = build_claims(row, vocabulary)
         if not row.get("qid"):
-            severity, message = ISSUE_LEGEND["not-reconciled"]
-            issues.insert(0, Issue("not-reconciled", severity, message))
+            severity, message = ISSUE_LEGEND["to-be-created"]
+            issues.insert(0, Issue("to-be-created", severity, message))
         plans.append((row, claims, issues))
 
     if with_labels:

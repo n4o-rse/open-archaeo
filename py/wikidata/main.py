@@ -294,9 +294,27 @@ def _create_items(args: argparse.Namespace, rows: list[dict],
         return 0
 
     stopped = push_step.blocking(issues)
+    blocked_ids = {row["id"] for row, _ in stopped}
     print(f"{len(creations)} items to create, "
           f"{sum(len(c) for _, c, _ in creations)} statements, "
-          f"{len(stopped)} blocked", file=sys.stderr)
+          f"{len(stopped)} blocked on {len(blocked_ids)} items", file=sys.stderr)
+
+    if args.skip_blocked and blocked_ids:
+        # One ambiguous forge should not hold up two hundred sound items, so
+        # the gate can be made per-item instead of per-batch. The skipped ones
+        # are named rather than counted: they are work, not noise.
+        names = [f"{r['id']} {r['name']}" for r, _, _ in creations
+                 if r["id"] in blocked_ids]
+        creations = [c for c in creations if c[0]["id"] not in blocked_ids]
+        issues = [(row, issue) for row, issue in issues
+                  if row["id"] not in blocked_ids]
+        stopped = []
+        print(f"  --skip-blocked: leaving out {len(names)} item(s): "
+              + "; ".join(names[:5])
+              + (" …" if len(names) > 5 else ""), file=sys.stderr)
+        if not creations:
+            print("nothing left to create.", file=sys.stderr)
+            return 1
 
     if not args.live:
         push_step.show_creations(creations, issues,
@@ -309,9 +327,12 @@ def _create_items(args: argparse.Namespace, rows: list[dict],
         codes = sorted({issue.code for _, issue in stopped})
         sys.exit("error: refusing to create while blocked issues stand: "
                  + ", ".join(codes)
-                 + ".\nAn item created wrong has to be found again before it "
-                   "can be fixed. Run 'categories --suggest', fill the qid "
-                   "column, then 'categories --apply'.")
+                 + f" ({len(blocked_ids)} item(s)).\n"
+                   "An item created wrong has to be found again before it can "
+                   "be fixed. Either resolve the cause -- 'vocab --suggest' "
+                   "and 'vocab --set' for a missing Q-id, 'categories --apply' "
+                   "for a class -- or pass --skip-blocked to create the sound "
+                   "items and leave these for later.")
 
     unchecked = [r for r, _, _ in creations if not r.get("checked")]
     if unchecked:
@@ -525,6 +546,10 @@ def add_push_arguments(parser: argparse.ArgumentParser) -> None:
                         help="credentials file (default: py/wikidata/config.ini)")
     parser.add_argument("--live", action="store_true",
                         help="actually write. Without this nothing leaves the machine")
+    parser.add_argument("--skip-blocked", action="store_true",
+                        help="with --create, leave out the items that carry a "
+                             "blocked issue and create the rest, instead of "
+                             "refusing the whole batch")
     parser.add_argument("--create", action="store_true",
                         help="create an item for every row that has no Q-id, "
                              "instead of adding statements to matched ones. "

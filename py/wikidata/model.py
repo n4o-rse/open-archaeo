@@ -264,10 +264,15 @@ ISSUE_LEGEND = {
         "exact match -- the two statements that say which open-archaeo entry "
         "it is. transform.py mints a slug for every row and exits if they are "
         "not unique, so this can only mean the CSV was edited by hand."),
-    "not-reconciled": (
-        Issue.BLOCKED,
-        "No Q-id, so push would skip the item entirely. Reconcile first, or "
-        "enter one by hand."),
+    "to-be-created": (
+        Issue.NOTE,
+        "No Q-id: none of the reconciliation keys found this entry in "
+        "Wikidata, so 'push --create' will create the item. That is the plan "
+        "rather than a problem -- and if it turns out a duplicate was created, "
+        "the identity block makes it findable afterwards, since P217 in "
+        "collection Q141190255 is a key nothing else in Wikidata uses. Plain "
+        "'push' still skips the item, because it only adds statements to items "
+        "that exist."),
     "zenodo-doi": (
         Issue.DEFERRED,
         "A 10.5281 DOI is a Zenodo deposit: it identifies a release, not the "
