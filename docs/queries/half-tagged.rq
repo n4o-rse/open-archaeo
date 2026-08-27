@@ -1,4 +1,4 @@
-# Only one of the two obligatory statements
+# An incomplete identity block
 PREFIX wd: <http://www.wikidata.org/entity/>
 PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX p: <http://www.wikidata.org/prop/>
@@ -9,17 +9,30 @@ PREFIX schema: <http://schema.org/>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 
-SELECT ?item ?itemLabel ?has
+SELECT ?item ?itemLabel ?missing
 WHERE {
+  ?item wdt:P31 wd:Q141115627 .
   {
-    ?item wdt:P31 wd:Q141115627 .
     FILTER NOT EXISTS { ?item wdt:P6104 wd:Q141169143 . }
-    BIND("class only" AS ?has)
+    BIND("P6104 WikiProject" AS ?missing)
   } UNION {
-    ?item wdt:P6104 wd:Q141169143 .
-    FILTER NOT EXISTS { ?item wdt:P31 wd:Q141115627 . }
-    BIND("WikiProject only" AS ?has)
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141190255 . }
+    BIND("P361 open-archaeo" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141115774 . }
+    BIND("P361 chublets.software" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P195 wd:Q141190255 . }
+    BIND("P195 collection" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS {
+      ?item p:P217 [ pq:P195 wd:Q141190255 ] .
+    }
+    BIND("P217 slug" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P2888 ?url . }
+    BIND("P2888 entry URL" AS ?missing)
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
 }
-ORDER BY ?has ?itemLabel
+ORDER BY ?missing ?itemLabel

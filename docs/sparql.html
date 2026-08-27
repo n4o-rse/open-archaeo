@@ -58,7 +58,7 @@ code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px;
 <div class="wrap">
   <header>
     <h1>Chublets in Wikidata</h1>
-    <p class="intro">Every chublet carries two statements: it is an instance of <a href='https://www.wikidata.org/wiki/Q141115627'>Q141115627</a> and it is maintained by <a href='https://www.wikidata.org/wiki/Q141169143'>Q141169143</a>. Together they make the set retrievable as a set, which is what these queries do. Edit any query and run it again -- it goes straight to the Wikidata Query Service from your browser.</p>
+    <p class="intro">Every chublet carries the same block of statements: it is an instance of <a href='https://www.wikidata.org/wiki/Q141115627'>Q141115627</a>, maintained by <a href='https://www.wikidata.org/wiki/Q141169143'>Q141169143</a>, part of <a href='https://www.wikidata.org/wiki/Q141190255'>open-archaeo</a> and of <a href='https://www.wikidata.org/wiki/Q141115774'>chublets.software</a>. Those make the set retrievable as a set; <code>P217</code> inventory number, holding the open-archaeo slug in collection <code>P195</code>, says which entry an item is. Edit any query and run it again -- it goes straight to the Wikidata Query Service from your browser.</p>
     <nav>
       <a href="https://www.wikidata.org/wiki/Wikidata:WikiProject_Informatics/Software/Properties">Software properties</a>
       <a href="MAPPING.md">Mapping</a>
@@ -196,23 +196,58 @@ ORDER BY DESC(?tools)</textarea>
       </div>
       <div class="results" id="r-by-subject"></div>
     </section>
-    <section class="query" id="half-tagged">
-      <h2>Only one of the two obligatory statements</h2>
-      <p class="note">A consistency check on the pair itself. Items appear here when the class and the WikiProject statement disagree, which usually means an interrupted import rather than a modelling decision. An empty result is the healthy one.</p>
-      <textarea id="q-half-tagged" spellcheck="false">SELECT ?item ?itemLabel ?has
+    <section class="query" id="by-slug">
+      <h2>Find an entry by its open-archaeo slug</h2>
+      <p class="note">The identifying question, and the one the reconcile step asks first: which item is <em>this</em> open-archaeo entry? The slug sits in P217 inventory number, qualified by P195 collection -- the qualifier is what stops the query from matching an object numbered the same way in some other register. Replace the slugs in the VALUES block with yours.</p>
+      <textarea id="q-by-slug" spellcheck="false">SELECT ?slug ?item ?itemLabel ?entry
 WHERE {
+  VALUES ?slug { &quot;quantaar&quot; &quot;tabula&quot; &quot;rrtools&quot; }
+  ?item p:P217 ?statement .
+  ?statement ps:P217 ?slug ;
+             pq:P195 wd:Q141190255 .
+  OPTIONAL { ?item wdt:P2888 ?entry . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language &quot;en,de&quot;. }
+}
+ORDER BY ?slug</textarea>
+      <div class="controls">
+        <button class="run" id="b-by-slug" onclick="run('by-slug')">Run</button>
+        <button onclick="reset('by-slug')">Reset</button>
+        <button onclick="openInWdqs('by-slug')">Open in WDQS</button>
+        <a href="queries/by-slug.rq" download>.rq</a>
+        <span class="status" id="s-by-slug"></span>
+      </div>
+      <div class="results" id="r-by-slug"></div>
+    </section>
+    <section class="query" id="half-tagged">
+      <h2>An incomplete identity block</h2>
+      <p class="note">A consistency check on the block itself. Items appear here when they carry the chublet class but are missing one of the statements that should always accompany it, which usually means an interrupted import rather than a modelling decision. An empty result is the healthy one.</p>
+      <textarea id="q-half-tagged" spellcheck="false">SELECT ?item ?itemLabel ?missing
+WHERE {
+  ?item wdt:P31 wd:Q141115627 .
   {
-    ?item wdt:P31 wd:Q141115627 .
     FILTER NOT EXISTS { ?item wdt:P6104 wd:Q141169143 . }
-    BIND(&quot;class only&quot; AS ?has)
+    BIND(&quot;P6104 WikiProject&quot; AS ?missing)
   } UNION {
-    ?item wdt:P6104 wd:Q141169143 .
-    FILTER NOT EXISTS { ?item wdt:P31 wd:Q141115627 . }
-    BIND(&quot;WikiProject only&quot; AS ?has)
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141190255 . }
+    BIND(&quot;P361 open-archaeo&quot; AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141115774 . }
+    BIND(&quot;P361 chublets.software&quot; AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P195 wd:Q141190255 . }
+    BIND(&quot;P195 collection&quot; AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS {
+      ?item p:P217 [ pq:P195 wd:Q141190255 ] .
+    }
+    BIND(&quot;P217 slug&quot; AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P2888 ?url . }
+    BIND(&quot;P2888 entry URL&quot; AS ?missing)
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language &quot;en,de&quot;. }
 }
-ORDER BY ?has ?itemLabel</textarea>
+ORDER BY ?missing ?itemLabel</textarea>
       <div class="controls">
         <button class="run" id="b-half-tagged" onclick="run('half-tagged')">Run</button>
         <button onclick="reset('half-tagged')">Reset</button>
@@ -224,7 +259,7 @@ ORDER BY ?has ?itemLabel</textarea>
     </section>
     <section class="query" id="reconcile-by-repository">
       <h2>Reconcile a repository URL</h2>
-      <p class="note">The lookup the <code>reconcile</code> step runs in batches. Paste your own URLs into the VALUES block. Note that it does <em>not</em> filter on the two obligatory statements -- the point is to find items that exist but are not tagged yet.</p>
+      <p class="note">The lookup the <code>reconcile</code> step runs in batches. Paste your own URLs into the VALUES block. Note that it does <em>not</em> filter on the identity block -- the point is to find items that exist but are not tagged yet.</p>
       <textarea id="q-reconcile-by-repository" spellcheck="false">SELECT ?repo ?item ?itemLabel ?tagged
 WHERE {
   VALUES ?repo {
@@ -251,7 +286,7 @@ WHERE {
 var ENDPOINT = "https://query.wikidata.org/sparql";
 var MAX_ROWS = 500;
 var PREFIXES = "PREFIX wd: <http://www.wikidata.org/entity/>\nPREFIX wdt: <http://www.wikidata.org/prop/direct/>\nPREFIX p: <http://www.wikidata.org/prop/>\nPREFIX ps: <http://www.wikidata.org/prop/statement/>\nPREFIX pq: <http://www.wikidata.org/prop/qualifier/>\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nPREFIX schema: <http://schema.org/>\nPREFIX wikibase: <http://wikiba.se/ontology#>\nPREFIX bd: <http://www.bigdata.com/rdf#>";
-var ORIGINAL = {"all-chublets": "SELECT ?item ?itemLabel ?itemDescription ?repo ?licenceLabel ?languageLabel\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 .\n  OPTIONAL { ?item wdt:P1324 ?repo . }\n  OPTIONAL { ?item wdt:P275 ?licence . }\n  OPTIONAL { ?item wdt:P277 ?language . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "count-by-language": "SELECT ?languageLabel (COUNT(DISTINCT ?item) AS ?tools)\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P277 ?language .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nGROUP BY ?languageLabel\nORDER BY DESC(?tools)", "missing-licence": "SELECT ?item ?itemLabel ?repo\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P1324 ?repo .\n  FILTER NOT EXISTS { ?item wdt:P275 ?licence . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "missing-vcs-qualifier": "SELECT ?item ?itemLabel ?repo\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        p:P1324 ?statement .\n  ?statement ps:P1324 ?repo .\n  FILTER NOT EXISTS { ?statement pq:P8423 ?vcs . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "archive-snapshots": "SELECT ?item ?itemLabel ?repo ?archive ?archiveDate\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        p:P1324 ?statement .\n  ?statement ps:P1324 ?repo ;\n             pq:P1065 ?archive .\n  OPTIONAL { ?statement pq:P2960 ?archiveDate . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY DESC(?archiveDate)", "by-subject": "SELECT ?subjectLabel (COUNT(DISTINCT ?item) AS ?tools)\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P921 ?subject .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nGROUP BY ?subjectLabel\nORDER BY DESC(?tools)", "half-tagged": "SELECT ?item ?itemLabel ?has\nWHERE {\n  {\n    ?item wdt:P31 wd:Q141115627 .\n    FILTER NOT EXISTS { ?item wdt:P6104 wd:Q141169143 . }\n    BIND(\"class only\" AS ?has)\n  } UNION {\n    ?item wdt:P6104 wd:Q141169143 .\n    FILTER NOT EXISTS { ?item wdt:P31 wd:Q141115627 . }\n    BIND(\"WikiProject only\" AS ?has)\n  }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?has ?itemLabel", "reconcile-by-repository": "SELECT ?repo ?item ?itemLabel ?tagged\nWHERE {\n  VALUES ?repo {\n    <https://github.com/ISAAKiel/quantAAR>\n    <https://github.com/tesselle/tabula>\n    <https://github.com/benmarwick/rrtools>\n  }\n  ?item wdt:P1324 ?repo .\n  BIND(EXISTS { ?item wdt:P6104 wd:Q141169143 } AS ?tagged)\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}"};
+var ORIGINAL = {"all-chublets": "SELECT ?item ?itemLabel ?itemDescription ?repo ?licenceLabel ?languageLabel\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 .\n  OPTIONAL { ?item wdt:P1324 ?repo . }\n  OPTIONAL { ?item wdt:P275 ?licence . }\n  OPTIONAL { ?item wdt:P277 ?language . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "count-by-language": "SELECT ?languageLabel (COUNT(DISTINCT ?item) AS ?tools)\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P277 ?language .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nGROUP BY ?languageLabel\nORDER BY DESC(?tools)", "missing-licence": "SELECT ?item ?itemLabel ?repo\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P1324 ?repo .\n  FILTER NOT EXISTS { ?item wdt:P275 ?licence . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "missing-vcs-qualifier": "SELECT ?item ?itemLabel ?repo\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        p:P1324 ?statement .\n  ?statement ps:P1324 ?repo .\n  FILTER NOT EXISTS { ?statement pq:P8423 ?vcs . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?itemLabel", "archive-snapshots": "SELECT ?item ?itemLabel ?repo ?archive ?archiveDate\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        p:P1324 ?statement .\n  ?statement ps:P1324 ?repo ;\n             pq:P1065 ?archive .\n  OPTIONAL { ?statement pq:P2960 ?archiveDate . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY DESC(?archiveDate)", "by-subject": "SELECT ?subjectLabel (COUNT(DISTINCT ?item) AS ?tools)\nWHERE {\n  ?item wdt:P31 wd:Q141115627 ;\n        wdt:P6104 wd:Q141169143 ;\n        wdt:P921 ?subject .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nGROUP BY ?subjectLabel\nORDER BY DESC(?tools)", "by-slug": "SELECT ?slug ?item ?itemLabel ?entry\nWHERE {\n  VALUES ?slug { \"quantaar\" \"tabula\" \"rrtools\" }\n  ?item p:P217 ?statement .\n  ?statement ps:P217 ?slug ;\n             pq:P195 wd:Q141190255 .\n  OPTIONAL { ?item wdt:P2888 ?entry . }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?slug", "half-tagged": "SELECT ?item ?itemLabel ?missing\nWHERE {\n  ?item wdt:P31 wd:Q141115627 .\n  {\n    FILTER NOT EXISTS { ?item wdt:P6104 wd:Q141169143 . }\n    BIND(\"P6104 WikiProject\" AS ?missing)\n  } UNION {\n    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141190255 . }\n    BIND(\"P361 open-archaeo\" AS ?missing)\n  } UNION {\n    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141115774 . }\n    BIND(\"P361 chublets.software\" AS ?missing)\n  } UNION {\n    FILTER NOT EXISTS { ?item wdt:P195 wd:Q141190255 . }\n    BIND(\"P195 collection\" AS ?missing)\n  } UNION {\n    FILTER NOT EXISTS {\n      ?item p:P217 [ pq:P195 wd:Q141190255 ] .\n    }\n    BIND(\"P217 slug\" AS ?missing)\n  } UNION {\n    FILTER NOT EXISTS { ?item wdt:P2888 ?url . }\n    BIND(\"P2888 entry URL\" AS ?missing)\n  }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}\nORDER BY ?missing ?itemLabel", "reconcile-by-repository": "SELECT ?repo ?item ?itemLabel ?tagged\nWHERE {\n  VALUES ?repo {\n    <https://github.com/ISAAKiel/quantAAR>\n    <https://github.com/tesselle/tabula>\n    <https://github.com/benmarwick/rrtools>\n  }\n  ?item wdt:P1324 ?repo .\n  BIND(EXISTS { ?item wdt:P6104 wd:Q141169143 } AS ?tagged)\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,de\". }\n}"};
 
 function escapeHtml(value) {
   return String(value)

@@ -12,17 +12,42 @@ Nothing here touches the network.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 
-# -- the two obligatory statements -----------------------------------------
-# Every chublet carries both. The class alone would also catch research
-# software modelled by other communities; the WikiProject statement is what
-# draws the boundary and makes the set retrievable as a set.
+try:  # the entry URL has one definition, and it lives in transform.py
+    from transform import post_url
+except ImportError:  # imported without py/ on the path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from transform import post_url
+
+# -- the identity block ------------------------------------------------------
+# Six statements that every chublet from open-archaeo carries, whatever the row
+# says. Together they answer three separate questions, which is why no single
+# one of them is enough:
+#
+#   what is it        P31 chublet class
+#   whose set is it   P6104 WikiProject, P361 part of open-archaeo and of
+#                     chublets.software
+#   which entry is it P195 collection plus P217 inventory number holding the
+#                     slug, and P2888 exact match holding the entry URL
+#
+# The last pair is the one that makes an item identifiable *as a particular
+# open-archaeo entry* rather than merely as a member of the set: the slug is
+# open-archaeo's own key, and until a dedicated identifier property exists
+# (the P6830 swMATH precedent), inventory number in a stated collection is how
+# Wikidata expresses "record X in register Y".
 CHUBLET_CLASS = "Q141115627"
 CHUBLET_WIKIPROJECT = "Q141169143"
+OPEN_ARCHAEO = "Q141190255"
+CHUBLETS_PLATFORM = "Q141115774"
 
 # -- properties -------------------------------------------------------------
 P_INSTANCE_OF = "P31"
 P_MAINTAINED_BY_WIKIPROJECT = "P6104"
+P_PART_OF = "P361"
+P_COLLECTION = "P195"
+P_INVENTORY_NUMBER = "P217"
 P_REPOSITORY = "P1324"
 P_VERSION_CONTROL = "P8423"
 P_ARCHIVE_URL = "P1065"
@@ -44,6 +69,9 @@ P_MAIN_SUBJECT = "P921"
 EXPECTED_DATATYPES = {
     P_INSTANCE_OF: "wikibase-item",
     P_MAINTAINED_BY_WIKIPROJECT: "wikibase-item",
+    P_PART_OF: "wikibase-item",
+    P_COLLECTION: "wikibase-item",
+    P_INVENTORY_NUMBER: "string",
     P_REPOSITORY: "url",
     P_VERSION_CONTROL: "wikibase-item",
     P_ARCHIVE_URL: "url",
@@ -59,6 +87,30 @@ EXPECTED_DATATYPES = {
     P_EXACT_MATCH: "url",
     P_MAIN_SUBJECT: "wikibase-item",
 }
+
+# The item-valued half of the identity block: property, value, and why it is
+# there. Everything that needs to know what a chublet looks like reads this
+# table rather than repeating the pairs -- the preflight resolves these Q-ids,
+# the preview labels them, reconcile builds its "is this already a chublet"
+# query from them. The other half is per-row, because it carries the slug:
+# see ``slug_claims()`` below.
+IDENTITY_STATEMENTS = [
+    (P_INSTANCE_OF, CHUBLET_CLASS,
+     "a chublet: subclass of Q73899440 research software, belonging to "
+     "Q141115774 chublets.software"),
+    (P_MAINTAINED_BY_WIKIPROJECT, CHUBLET_WIKIPROJECT,
+     "maintained by the WikiProject, which is what makes the set retrievable "
+     "as a set"),
+    (P_PART_OF, OPEN_ARCHAEO, "part of open-archaeo"),
+    (P_PART_OF, CHUBLETS_PLATFORM, "part of chublets.software"),
+    (P_COLLECTION, OPEN_ARCHAEO,
+     "open-archaeo is the collection holding the record"),
+]
+
+# Every Q-id the identity block uses, in a stable order, for the preflight and
+# the preview.
+IDENTITY_QIDS = [CHUBLET_CLASS, CHUBLET_WIKIPROJECT, OPEN_ARCHAEO,
+                 CHUBLETS_PLATFORM]
 
 # Forge -> version control system. Bitbucket hosts both Git and Mercurial, so
 # it stays empty and its repositories are reported rather than qualified.
@@ -106,6 +158,9 @@ CONCORDANCE_EXTRA = [
 PROPERTY_LABELS = {
     P_INSTANCE_OF: "instance of",
     P_MAINTAINED_BY_WIKIPROJECT: "maintained by WikiProject",
+    P_PART_OF: "part of",
+    P_COLLECTION: "collection",
+    P_INVENTORY_NUMBER: "inventory number",
     P_REPOSITORY: "source code repository URL",
     P_VERSION_CONTROL: "version control system",
     P_ARCHIVE_URL: "archive URL",
@@ -203,6 +258,12 @@ ISSUE_LEGEND = {
         Issue.BLOCKED,
         "The category has no Q-id yet, so the item would carry only the "
         "chublet class and nothing saying what kind of software it is."),
+    "no-slug": (
+        Issue.BLOCKED,
+        "No slug, so the item cannot carry P217 inventory number or P2888 "
+        "exact match -- the two statements that say which open-archaeo entry "
+        "it is. transform.py mints a slug for every row and exits if they are "
+        "not unique, so this can only mean the CSV was edited by hand."),
     "not-reconciled": (
         Issue.BLOCKED,
         "No Q-id, so push would skip the item entirely. Reconcile first, or "
@@ -254,15 +315,27 @@ ISSUE_LEGEND = {
 # A remark that applies to every item is a remark about the mapping, not about
 # any item, so it belongs on the page once rather than in 208 grey boxes.
 MODELLING_NOTES = [
+    ("the identity block",
+     "Six statements go on every item whatever the row says. P31 puts it in the "
+     "chublet class, P6104 ties it to the WikiProject, P361 links it to "
+     "open-archaeo and to chublets.software, and P195 names open-archaeo as the "
+     "collection the record sits in. Those five say which set the item belongs "
+     "to. P217 inventory number, carrying the open-archaeo slug and qualified "
+     "by P195, says which entry it is. Membership and identity are different "
+     "questions, and an import that answers only the first cannot be checked "
+     "row by row against its source."),
     ("exact match rather than described at URL",
      "The open-archaeo entry is not a page that merely mentions the tool; it is "
      "a record of the same thing. P2888 exact match carries exactly that "
      "reading -- its equivalent property is skos:exactMatch and its "
      "unique-value constraint matches the one-entry-one-item relation -- so it "
      "is used for the entry page, and P973 described at URL is left for blog "
-     "posts and videos, which describe without being the same thing. A "
+     "posts and videos, which describe without being the same thing. It is "
+     "built from the slug rather than copied from the url column, so the "
+     "resolvable and the bare form of the same identifier cannot disagree. A "
      "dedicated open-archaeo identifier property, following the P6830 swMATH "
-     "precedent, would be better still and is worth proposing."),
+     "precedent, would be better still and is worth proposing: it would replace "
+     "both P2888 and the P217/P195 pair with a single statement."),
     ("classification beyond the chublet class",
      "Every item carries the chublet class and the WikiProject. Beyond those it "
      "should also say what kind of software it is, which is what the category "
@@ -333,6 +406,30 @@ def repository_variants(url: str) -> list[str]:
     return sorted(variants)
 
 
+def slug_claims(slug: str) -> list[Claim]:
+    """The two statements that carry the open-archaeo slug.
+
+    ``P2888`` exact match takes the resolvable entry URL, ``P217`` inventory
+    number the bare slug, qualified by ``P195`` collection so the number is
+    read against the right register -- an inventory number without its
+    collection is a string with no referent, which is why P217 carries a
+    required-qualifier constraint for it.
+
+    The URL is built from the slug rather than copied from the ``url`` column,
+    so that the two statements cannot disagree: they are the same identifier
+    written twice, once resolvable and once bare.
+    """
+    if not slug:
+        return []
+    return [
+        Claim(P_EXACT_MATCH, post_url(slug), "url",
+              note="obligatory: the open-archaeo entry, same thing"),
+        Claim(P_INVENTORY_NUMBER, slug, "string",
+              qualifiers=[Claim(P_COLLECTION, OPEN_ARCHAEO)],
+              note="obligatory: open-archaeo slug"),
+    ]
+
+
 def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]:
     """Turn one row into the statements it supports and the issues it raises.
 
@@ -349,11 +446,19 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
         severity, message = ISSUE_LEGEND[code]
         issues.append(Issue(code, severity, message, detail))
 
-    # -- classification ----------------------------------------------------
-    # The chublet class and the WikiProject go on every item. Beyond them the
-    # item should say what kind of software it is, which is what the category
-    # column knows and the class alone does not.
-    claims.append(Claim(P_INSTANCE_OF, CHUBLET_CLASS, note="obligatory"))
+    # -- the identity block ------------------------------------------------
+    # Six statements, on every item, independent of what the row contains: the
+    # class, the WikiProject, the two part-of links, the collection, and the
+    # slug written twice. Beyond them the item should also say what kind of
+    # software it is, which is what the category column knows and the class
+    # alone does not.
+    for prop, qid, why in IDENTITY_STATEMENTS:
+        claims.append(Claim(prop, qid, note=f"obligatory: {why}"))
+    if row.get("slug"):
+        claims.extend(slug_claims(row["slug"]))
+    else:
+        raise_issue("no-slug")
+
     for label in SUPERCLASSES:
         qid = vocabulary.get("superclass", {}).get(label)
         if qid:
@@ -364,8 +469,6 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
                             note=f"from category: {row['category']}"))
     else:
         raise_issue("unresolved-class", row["category"])
-    claims.append(Claim(P_MAINTAINED_BY_WIKIPROJECT, CHUBLET_WIKIPROJECT,
-                        note="obligatory"))
 
     if row["name"]:
         claims.append(Claim(P_NAME, row["name"], "monolingual@en"))
@@ -446,14 +549,10 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
             raise_issue("unresolved-tag", tag)
 
     # -- links -------------------------------------------------------------
-    # The open-archaeo entry is not merely a page that mentions the tool; it is
-    # a record *of* the tool. P2888 exact match carries exactly that reading --
-    # its equivalent property is skos:exactMatch -- and its unique-value
-    # constraint matches the one-entry-one-item relation. P973 is then free for
-    # the pages that describe without being the same thing.
-    if row["url"]:
-        claims.append(Claim(P_EXACT_MATCH, row["url"], "url",
-                            note="open-archaeo entry, same thing"))
+    # The open-archaeo entry itself is not here: it belongs to the identity
+    # block above, as P2888 exact match alongside the slug. What remains are
+    # the pages that describe the tool without being the same thing as it,
+    # which is what P973 described at URL is for.
     for column, what in (("blogpost", "blog post"), ("youtube", "video"),
                          ("publication", "publication")):
         for url in [u for u in row.get(column, "").split("|") if u]:

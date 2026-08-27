@@ -1,0 +1,21 @@
+# Find an entry by its open-archaeo slug
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
+PREFIX pq: <http://www.wikidata.org/prop/qualifier/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+
+SELECT ?slug ?item ?itemLabel ?entry
+WHERE {
+  VALUES ?slug { "quantaar" "tabula" "rrtools" }
+  ?item p:P217 ?statement .
+  ?statement ps:P217 ?slug ;
+             pq:P195 wd:Q141190255 .
+  OPTIONAL { ?item wdt:P2888 ?entry . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
+}
+ORDER BY ?slug

@@ -15,13 +15,17 @@ from __future__ import annotations
 PAGE = {
     "title": "Chublets in Wikidata",
     "intro": (
-        "Every chublet carries two statements: it is an instance of "
-        "<a href='https://www.wikidata.org/wiki/Q141115627'>Q141115627</a> and "
-        "it is maintained by "
-        "<a href='https://www.wikidata.org/wiki/Q141169143'>Q141169143</a>. "
-        "Together they make the set retrievable as a set, which is what these "
-        "queries do. Edit any query and run it again -- it goes straight to the "
-        "Wikidata Query Service from your browser."
+        "Every chublet carries the same block of statements: it is an instance "
+        "of <a href='https://www.wikidata.org/wiki/Q141115627'>Q141115627</a>, "
+        "maintained by "
+        "<a href='https://www.wikidata.org/wiki/Q141169143'>Q141169143</a>, "
+        "part of <a href='https://www.wikidata.org/wiki/Q141190255'>open-archaeo"
+        "</a> and of <a href='https://www.wikidata.org/wiki/Q141115774'>"
+        "chublets.software</a>. Those make the set retrievable as a set; "
+        "<code>P217</code> inventory number, holding the open-archaeo slug in "
+        "collection <code>P195</code>, says which entry an item is. Edit any "
+        "query and run it again -- it goes straight to the Wikidata Query "
+        "Service from your browser."
     ),
     "footer": (
         "Queries run against <code>query.wikidata.org</code>. The mapping behind "
@@ -153,34 +157,69 @@ GROUP BY ?subjectLabel
 ORDER BY DESC(?tools)""",
     },
     {
+        "id": "by-slug",
+        "title": "Find an entry by its open-archaeo slug",
+        "intro": "The identifying question, and the one the reconcile step "
+                 "asks first: which item is <em>this</em> open-archaeo entry? "
+                 "The slug sits in P217 inventory number, qualified by P195 "
+                 "collection -- the qualifier is what stops the query from "
+                 "matching an object numbered the same way in some other "
+                 "register. Replace the slugs in the VALUES block with yours.",
+        "sparql": """\
+SELECT ?slug ?item ?itemLabel ?entry
+WHERE {
+  VALUES ?slug { "quantaar" "tabula" "rrtools" }
+  ?item p:P217 ?statement .
+  ?statement ps:P217 ?slug ;
+             pq:P195 wd:Q141190255 .
+  OPTIONAL { ?item wdt:P2888 ?entry . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
+}
+ORDER BY ?slug""",
+    },
+    {
         "id": "half-tagged",
-        "title": "Only one of the two obligatory statements",
-        "intro": "A consistency check on the pair itself. Items appear here "
-                 "when the class and the WikiProject statement disagree, which "
-                 "usually means an interrupted import rather than a modelling "
+        "title": "An incomplete identity block",
+        "intro": "A consistency check on the block itself. Items appear here "
+                 "when they carry the chublet class but are missing one of the "
+                 "statements that should always accompany it, which usually "
+                 "means an interrupted import rather than a modelling "
                  "decision. An empty result is the healthy one.",
         "sparql": """\
-SELECT ?item ?itemLabel ?has
+SELECT ?item ?itemLabel ?missing
 WHERE {
+  ?item wdt:P31 wd:Q141115627 .
   {
-    ?item wdt:P31 wd:Q141115627 .
     FILTER NOT EXISTS { ?item wdt:P6104 wd:Q141169143 . }
-    BIND("class only" AS ?has)
+    BIND("P6104 WikiProject" AS ?missing)
   } UNION {
-    ?item wdt:P6104 wd:Q141169143 .
-    FILTER NOT EXISTS { ?item wdt:P31 wd:Q141115627 . }
-    BIND("WikiProject only" AS ?has)
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141190255 . }
+    BIND("P361 open-archaeo" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P361 wd:Q141115774 . }
+    BIND("P361 chublets.software" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P195 wd:Q141190255 . }
+    BIND("P195 collection" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS {
+      ?item p:P217 [ pq:P195 wd:Q141190255 ] .
+    }
+    BIND("P217 slug" AS ?missing)
+  } UNION {
+    FILTER NOT EXISTS { ?item wdt:P2888 ?url . }
+    BIND("P2888 entry URL" AS ?missing)
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,de". }
 }
-ORDER BY ?has ?itemLabel""",
+ORDER BY ?missing ?itemLabel""",
     },
     {
         "id": "reconcile-by-repository",
         "title": "Reconcile a repository URL",
         "intro": "The lookup the <code>reconcile</code> step runs in batches. "
                  "Paste your own URLs into the VALUES block. Note that it does "
-                 "<em>not</em> filter on the two obligatory statements -- the "
+                 "<em>not</em> filter on the identity block -- the "
                  "point is to find items that exist but are not tagged yet.",
         "sparql": """\
 SELECT ?repo ?item ?itemLabel ?tagged

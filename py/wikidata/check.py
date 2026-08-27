@@ -16,10 +16,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import labels as label_cache
 import vocabulary as vocabulary_module
 from api import WikidataClient, WikidataError, get_entities, read_credentials, sparql
 from model import (
-    CHUBLET_CLASS, CHUBLET_WIKIPROJECT, EXPECTED_DATATYPES, build_claims,
+    EXPECTED_DATATYPES, IDENTITY_QIDS, IDENTITY_STATEMENTS, PROPERTY_LABELS,
+    P_EXACT_MATCH, P_INVENTORY_NUMBER, build_claims,
 )
 from reconcile import CONCORDANCE_NAME, load_concordance
 
@@ -92,24 +94,37 @@ def check_endpoints(report: Report) -> bool:
 
 
 def check_entities(report: Report) -> None:
-    """The two obligatory Q-ids must exist and be items."""
+    """Every Q-id in the identity block must exist and be an item.
+
+    Printing the label matters as much as the existence check: a Q-id that
+    exists but names something else is the failure this catches, and only a
+    person reading the label can catch it.
+    """
     report.section("Obligatory identifiers")
+    roles: dict[str, list[str]] = {}
+    for prop, qid, _ in IDENTITY_STATEMENTS:
+        roles.setdefault(qid, []).append(
+            f"{prop} {PROPERTY_LABELS.get(prop, '')}".strip())
     try:
-        entities = get_entities([CHUBLET_CLASS, CHUBLET_WIKIPROJECT],
-                                props="info|labels|descriptions")
+        entities = get_entities(IDENTITY_QIDS, props="info|labels|descriptions")
     except WikidataError as exc:
         report.line(FAIL, f"cannot read the identifiers: {exc}")
         return
-    for qid, role in ((CHUBLET_CLASS, "P31 value"),
-                      (CHUBLET_WIKIPROJECT, "P6104 value")):
+    found: dict[str, str] = {}
+    for qid in IDENTITY_QIDS:
+        role = ", ".join(roles.get(qid, ["identity block"])) + " value"
         entity = entities.get(qid, {})
         if entity.get("missing") is not None or "id" not in entity:
             report.line(FAIL, f"{qid} ({role}) does not exist on Wikidata")
             continue
         label = entity.get("labels", {}).get("en", {}).get("value", "")
+        found[qid] = label
         description = entity.get("descriptions", {}).get("en", {}).get("value", "")
         report.line(OK, f"{qid} ({role}) = {label or '(no English label)'}"
                         + (f" -- {description}" if description else ""))
+    # These are the labels the preview needs, and this step has just read them
+    # for free -- so the cache is filled here rather than by a second lookup.
+    label_cache.update(found)
 
 
 def check_properties(report: Report) -> None:
@@ -146,7 +161,7 @@ def check_concordance(report: Report, path: Path) -> list[dict]:
     manual = [r for r in matched if r.get("match_property") == "manual"]
     report.line(OK, f"{len(rows)} rows, {len(matched)} matched to a Q-id "
                     f"({len(manual)} of them by hand)")
-    report.line(OK, f"{len(tagged)} already carry both obligatory statements; "
+    report.line(OK, f"{len(tagged)} already carry the whole identity block; "
                     f"{len(matched) - len(tagged)} matched but not yet tagged")
     stale = {r["checked"] for r in matched if r.get("checked")}
     if stale:
@@ -178,6 +193,14 @@ def check_vocabulary(report: Report, path: Path) -> dict | None:
     return vocab
 
 
+# The obligatory statements: the five item-valued ones plus P2888 and P217,
+# which carry the slug. An item short of any of them is a defect in the
+# mapping rather than a gap in the data.
+IDENTITY_PROPERTIES = ({prop for prop, _, _ in IDENTITY_STATEMENTS}
+                       | {P_EXACT_MATCH, P_INVENTORY_NUMBER})
+IDENTITY_EXPECTED = len(IDENTITY_STATEMENTS) + 2
+
+
 def check_plan(report: Report, rows: list[dict], vocab: dict | None) -> None:
     """Build every statement offline and report what push would do."""
     report.section("Plan")
@@ -193,17 +216,29 @@ def check_plan(report: Report, rows: list[dict], vocab: dict | None) -> None:
     by_property: dict[str, int] = {}
     by_code: dict[str, tuple[str, int]] = {}
     qualifiers = 0
+    thin: list[str] = []
     for row in targets:
         claims, issues = build_claims(row, vocab)
+        obligatory = 0
         for claim in claims:
             by_property[claim.prop] = by_property.get(claim.prop, 0) + 1
             qualifiers += len(claim.qualifiers)
+            if claim.prop in IDENTITY_PROPERTIES and \
+                    claim.note.startswith("obligatory"):
+                obligatory += 1
+        if obligatory < IDENTITY_EXPECTED:
+            thin.append(row["id"])
         for issue in issues:
             severity, count = by_code.get(issue.code, (issue.severity, 0))
             by_code[issue.code] = (severity, count + 1)
     total = sum(by_property.values())
     report.line(OK, f"{len(targets)} items, {total} statements, "
                     f"{qualifiers} qualifiers")
+
+    report.line(FAIL if thin else OK,
+                f"identity block complete on {len(targets) - len(thin)}/"
+                f"{len(targets)} items"
+                + (f" -- missing on {', '.join(thin[:5])}" if thin else ""))
     for prop, count in sorted(by_property.items(), key=lambda kv: -kv[1]):
         report.line(OK, f"  {prop}: {count}")
     for code, (severity, count) in sorted(by_code.items(),

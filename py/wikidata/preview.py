@@ -30,7 +30,7 @@ from datetime import date
 from pathlib import Path
 
 from model import (
-    CHUBLET_CLASS, CHUBLET_WIKIPROJECT, FORMATTER_URLS, ISSUE_LEGEND,
+    FORMATTER_URLS, IDENTITY_QIDS, ISSUE_LEGEND,
     MODELLING_NOTES, PROPERTY_LABELS, Issue, build_claims,
 )
 
@@ -129,7 +129,7 @@ def choose_sample(rows: list[dict], size: int = 0) -> list[dict]:
 
 def collect_item_values(plans: list) -> set[str]:
     """Every Q-id appearing as a value or qualifier value on the page."""
-    found = {CHUBLET_CLASS, CHUBLET_WIKIPROJECT}
+    found = set(IDENTITY_QIDS)
     for _, claims, _ in plans:
         for claim in claims:
             if claim.datatype == "item":
@@ -140,18 +140,16 @@ def collect_item_values(plans: list) -> set[str]:
     return found
 
 
-def fetch_labels(qids: set[str]) -> dict[str, str]:
-    """Read English labels for the Q-ids used. Read-only, and optional."""
-    from api import WikidataError, get_entities
+def fetch_labels(qids: set[str], *, fetch: bool = False) -> dict[str, str]:
+    """Labels for the Q-ids on the page: from the cache, or freshly read.
 
-    try:
-        entities = get_entities(sorted(qids), props="labels")
-    except WikidataError as error:
-        print(f"  could not read labels ({error}); showing Q-ids only",
-              file=sys.stderr)
-        return {}
-    return {qid: entity.get("labels", {}).get("en", {}).get("value", "")
-            for qid, entity in entities.items() if "id" in entity}
+    Without ``--labels`` this reads ``labels.json`` and contacts nothing, so a
+    page built offline still shows names for every Q-id that has been looked up
+    at least once. With it, every id is read again and the cache is refreshed.
+    """
+    import labels as label_cache
+
+    return label_cache.resolve(qids, fetch=fetch)
 
 
 # --------------------------------------------------------------------------
@@ -665,10 +663,12 @@ def run(*, slice_path: Path, vocabulary: dict, concordance: Path,
             issues.insert(0, Issue("not-reconciled", severity, message))
         plans.append((row, claims, issues))
 
-    labels: dict[str, str] = {}
     if with_labels:
         print("  reading labels from Wikidata", file=sys.stderr)
-        labels = fetch_labels(collect_item_values(plans))
+    labels = fetch_labels(collect_item_values(plans), fetch=with_labels)
+    if not labels:
+        print("  no labels known yet -- run 'check' or 'preview --labels' "
+              "once with a connection", file=sys.stderr)
 
     sections = [s for s in vocabulary if not s.startswith("_")]
     values = [v for s in sections for v in vocabulary[s].values()]
@@ -702,5 +702,6 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="show only N items, one per modelling case first "
                              "(default: 0, meaning all of them)")
     parser.add_argument("--labels", action="store_true",
-                        help="read English labels for the Q-ids used, so values "
-                             "read as words rather than numbers. Read-only")
+                        help="re-read English labels from Wikidata and refresh "
+                             "labels.json. Without it the cached labels are "
+                             "used and nothing is contacted. Read-only")

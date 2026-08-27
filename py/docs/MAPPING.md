@@ -11,19 +11,31 @@ Property numbers marked **verified** were checked against Wikidata while
 writing this file. Everything else is a modelling decision and open to
 discussion.
 
-## Two statements on every item
+## The identity block
 
-Independent of what open-archaeo records, every chublet carries the same two
-statements. They are what makes the set queryable as a set.
+Independent of what open-archaeo records, every chublet carries the same block
+of statements. It answers two questions that are easy to conflate: *which set
+does this item belong to*, and *which entry in that set is it*.
 
 | Property | Value | Why |
 |---|---|---|
-| `P31` instance of | `Q141115627` | Puts the item in the class, which is a subclass of `Q73899440` belonging to `Q141115774`. |
+| `P31` instance of | `Q141115627` | Puts the item in the class, which is a subclass of `Q73899440` research software belonging to `Q141115774` chublets.software. |
 | `P6104` maintained by WikiProject | `Q141169143` | **verified.** Ties the item to the WikiProject, so `haswbstatement:P6104=Q141169143` retrieves the whole set without a curated focus list. |
+| `P361` part of | `Q141190255`, `Q141115774` | Two values: the entry comes from open-archaeo, and the item belongs to chublets.software. |
+| `P195` collection | `Q141190255` | Names open-archaeo as the register the record sits in, which is what makes the inventory number below readable. |
+| `P217` inventory number | `{slug}`, qualified by `P195` = `Q141190255` | **The identifying statement.** The open-archaeo slug is that project's own key; `P217` carries a required-qualifier constraint for `P195`, because a number without its register has no referent. |
+| `P2888` exact match | `https://open-archaeo.info/post/{slug}/` | The same identifier in resolvable form. Built from the slug, not copied from the `url` column, so the two cannot disagree. |
 
-`P6104` is the more important of the two in practice. Without it there is no
-way to ask *which items belong to this effort* -- class membership alone will
-also catch research software modelled by anyone else.
+The first four make the set retrievable as a set; `P6104` is the load-bearing
+one there, since class membership alone will also catch research software
+modelled by anyone else. The last two make a single item traceable back to the
+row it came from, which is what turns a one-off import into something that can
+be re-run and checked against its source.
+
+A dedicated open-archaeo identifier property, on the `P6830` swMATH precedent,
+would replace `P217`/`P195` and `P2888` with one statement. Until it exists,
+inventory-number-in-a-collection is how Wikidata already expresses *record X in
+register Y*, and it borrows no semantics it does not mean.
 
 ## Column by column
 
@@ -45,7 +57,8 @@ also catch research software modelled by anyone else.
 | `name` | 416 | label **and** `P2561` name | -- | verified |
 | `description` | 416 | item description | -- | needs rewriting |
 | `blogpost`, `youtube` | 4 | `P973` described at URL | -- | decision |
-| `url` (open-archaeo page) | 416 | `P973` described at URL | -- | interim, see below |
+| `slug` | 416 | `P217` inventory number | `P195` **required** | decision, see above |
+| `url` (open-archaeo page) | 416 | `P2888` exact match | -- | derived from `slug` |
 | `twitter`, `notes` | 0 / 2 | -- | -- | not import material |
 
 ## What the columns contain beyond their face value
@@ -137,8 +150,11 @@ the largest piece of manual work in the whole import.
 
 ## Reconcile before creating anything
 
-Many of these tools are in Wikidata already. `repository` is the strongest join
-key, `doi` the second:
+Two of the join keys are the identity block read back: an item already carrying
+the entry URL in `P2888`, or the slug in `P217` within collection `Q141190255`,
+*is* this entry rather than merely resembling it, so both are tried before
+anything else. For entries not yet imported, `repository` is the strongest key
+and `doi` the second:
 
 ```sparql
 SELECT ?item ?itemLabel ?repo WHERE {
@@ -158,6 +174,11 @@ Illustrative, for one entry, in QuickStatements v1 syntax:
 ```
 Q<item>	P31	Q141115627
 Q<item>	P6104	Q141169143
+Q<item>	P361	Q141190255
+Q<item>	P361	Q141115774
+Q<item>	P195	Q141190255
+Q<item>	P217	"quantaar"	P195	Q141190255
+Q<item>	P2888	"https://open-archaeo.info/post/quantaar/"
 Q<item>	P2561	en:"quantAAR"
 Q<item>	P1324	"https://github.com/ISAAKiel/quantAAR"	P8423	Q<Git>	P1065	"https://archive.org/details/github.com-ISAAKiel-quantAAR_-_2020-07-09_13-14-14"	P2960	+2020-07-09T00:00:00Z/11
 Q<item>	P277	Q<R>

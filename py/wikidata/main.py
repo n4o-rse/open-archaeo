@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Entry point for the open-archaeo -> Wikidata route.
 
+    python py/wikidata/main.py all             # the whole read-only route, then open the preview
     python py/wikidata/main.py                 # check: verifies everything, writes nothing
     python py/wikidata/main.py preview         # docs/preview.html: what would be written
     python py/wikidata/main.py reconcile       # what is in Wikidata already
@@ -27,6 +28,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+import webbrowser
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -35,7 +37,9 @@ ROOT = PACKAGE_DIR.parent          # repository root
 sys.path.insert(0, str(HERE))      # this folder, when run from elsewhere
 sys.path.insert(0, str(PACKAGE_DIR))  # for transform.py
 
+from api import WikidataError          # noqa: E402
 import check as check_step            # noqa: E402
+import labels as label_cache          # noqa: E402
 import preview as preview_step        # noqa: E402
 import push as push_step              # noqa: E402
 import reconcile as reconcile_step    # noqa: E402
@@ -45,12 +49,36 @@ import sparql as sparql_step          # noqa: E402
 import subjects as subjects_step      # noqa: E402
 import vocabulary as vocabulary_step  # noqa: E402
 from reconcile import CONCORDANCE_NAME  # noqa: E402
+import split as split_step            # noqa: E402
+import transform as transform_step    # noqa: E402
 from transform import (                # noqa: E402
     DEFAULT_CSV, SOFTWARE_CATEGORIES, load, simplify, to_csv,
 )
 
-STEPS = ["check", "preview", "reconcile", "vocab", "subjects", "push",
+STEPS = ["all", "check", "preview", "reconcile", "vocab", "subjects", "push",
          "sparql", "site"]
+
+# What ``all`` runs, in order, and whether the step needs a connection.
+#
+# Two steps are deliberately absent. ``push`` at any setting, because writing to
+# Wikidata is a decision and a step named "all" is a bad place to keep one. And
+# ``reconcile``, because it is the slow one: 208 entries mean several rounds of
+# batched queries against a query service that answers when it answers, and its
+# result -- the concordance -- changes far less often than the pages built from
+# it. ``--reconcile`` puts it back in.
+ALL_STEPS = [
+    ("transform", False, "rebuild out/ from open-archaeo.csv"),
+    ("vocab", False, "collect the controlled values"),
+    ("subjects", False, "build the P921 worksheet"),
+    ("check", True, "verify the whole route"),
+    ("preview", False, "render every item, with labels"),
+    ("sparql", False, "build the query page"),
+    ("site", False, "build the landing page"),
+]
+
+# Where ``reconcile`` goes when it is asked for: before check, so that the plan
+# section has a concordance to report on.
+RECONCILE_STEP = ("reconcile", True, "look up what Wikidata has already")
 
 DEFAULT_OUT_DIR = ROOT / "out"
 # The half of the dataset this team owns. See out/Python/README.md.
@@ -221,6 +249,94 @@ def step_sparql(args: argparse.Namespace) -> int:
     return 0
 
 
+def step_all(args: argparse.Namespace) -> int:
+    """Run the whole read-only route in order, then open the preview.
+
+    One command for the session described at the end of the README: rebuild the
+    table, collect the controlled values, look up what Wikidata already has,
+    verify, render, publish the pages. Every step in it is read-only -- push is
+    deliberately absent, because writing is a decision and a step called "all"
+    is the wrong place to make it.
+
+    A failing step stops the run, except the two that need a connection: with
+    --offline, or when the network is simply not there, they are skipped and
+    the rest still produces a page.
+    """
+    steps = list(ALL_STEPS)
+    if args.reconcile:
+        steps.insert(steps.index(("check", True, "verify the whole route")),
+                     RECONCILE_STEP)
+    steps = [s for s in steps if not (args.offline and s[1])]
+    print(f"running {len(steps)} steps" + (" (offline)" if args.offline else ""),
+          file=sys.stderr)
+
+    for index, (name, online, why) in enumerate(steps, start=1):
+        print(f"\n== {index}/{len(steps)}  {name} -- {why} ==", file=sys.stderr)
+        try:
+            code = _run_sub(name, args)
+        except WikidataError as error:
+            # Only the steps that need Wikidata can raise this, and a query
+            # service that is slow or down is not a reason to abandon the run:
+            # everything after this point builds from what is on disk.
+            print(f"   {name}: {error}", file=sys.stderr)
+            print("   carrying on without it.", file=sys.stderr)
+            continue
+        if code:
+            if online:
+                print(f"   {name} failed; carrying on without it. The preview "
+                      "will be built from what is on disk.", file=sys.stderr)
+                continue
+            print(f"   {name} failed. Stopping.", file=sys.stderr)
+            return code
+
+    page = args.out or preview_step.DEFAULT_OUTPUT
+    if not page.is_file():
+        print(f"\nno page at {page}", file=sys.stderr)
+        return 1
+    print(f"\n{page}", file=sys.stderr)
+    if args.open:
+        webbrowser.open(page.resolve().as_uri())
+    return 0
+
+
+def _run_sub(name: str, args: argparse.Namespace) -> int:
+    """Run one step of ``all`` with its own defaults plus the flags that carry.
+
+    Each step is re-parsed from its own subparser rather than handed this
+    namespace: a step that grows an option keeps working, and a step that does
+    not have --slice does not suddenly acquire one.
+    """
+    if name == "transform":
+        transform_step.run(args.csv, args.out_dir,
+                           None if args.all_categories else SOFTWARE_CATEGORIES)
+        split_step.run(args.out_dir / transform_step.OUTPUT_NAME, args.out_dir,
+                       quiet=True)
+        return 0
+
+    argv = [name]
+    if args.all_categories and name in ("vocab", "subjects", "reconcile", "check"):
+        argv.append("--all-categories")
+    if args.full and name in ("vocab", "reconcile", "check"):
+        argv.append("--full")
+    if args.slice and name in ("vocab", "reconcile", "check"):
+        argv += ["--slice", str(args.slice)]
+    if name == "preview":
+        # preview has no --full: it previews whatever table it is pointed at,
+        # so --full means pointing it at the whole one.
+        table = (args.out_dir / transform_step.OUTPUT_NAME) if args.full \
+            else args.slice
+        if table:
+            argv += ["--slice", str(table)]
+        argv += ["--out", str(args.out or preview_step.DEFAULT_OUTPUT)]
+        if not args.offline:
+            argv.append("--labels")
+    if name == "check" and args.offline:
+        argv.append("--offline")
+
+    sub = build_parser().parse_args(argv)
+    return sub.handler(sub)
+
+
 # --------------------------------------------------------------------------
 # Arguments
 # --------------------------------------------------------------------------
@@ -332,7 +448,26 @@ def add_sparql_arguments(parser: argparse.ArgumentParser) -> None:
                         help="with --verify, fail the build on a failing query")
 
 
+def add_all_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_source(parser)
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR,
+                        help="directory for the table and the concordance "
+                             "(default: out/)")
+    parser.add_argument("--out", type=Path, metavar="FILE",
+                        help="where to write the preview "
+                             "(default: docs/preview.html)")
+    parser.add_argument("--reconcile", action="store_true",
+                        help="also run reconcile, which is left out because it "
+                             "is slow and its result changes rarely")
+    parser.add_argument("--offline", action="store_true",
+                        help="skip every step that needs a connection. Labels "
+                             "come from the cache")
+    parser.add_argument("--no-open", dest="open", action="store_false",
+                        help="build everything but do not open a browser")
+
+
 HANDLERS = {
+    "all": (add_all_arguments, step_all),
     "check": (add_check_arguments, step_check),
     "preview": (add_preview_arguments, step_preview),
     "reconcile": (add_reconcile_arguments, step_reconcile),
@@ -368,7 +503,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--list" in argv:
         print("Available steps:")
         for name in STEPS:
-            print(f"  {name:<12} {HANDLERS[name][1].__doc__}")
+            summary = (HANDLERS[name][1].__doc__ or "").strip().splitlines()[0]
+            print(f"  {name:<12} {summary}")
         return 0
 
     # No step given: run the one that cannot do any damage.

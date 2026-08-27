@@ -60,6 +60,19 @@ def request(url: str, *, data: dict | None = None, headers: dict | None = None,
                 time.sleep(2.0 * attempt)
                 continue
             raise WikidataError(f"cannot reach {url}: {exc.reason}") from None
+        except (TimeoutError, OSError) as exc:
+            # A read that stops mid-response raises socket.timeout, which is a
+            # TimeoutError and *not* a URLError -- so without this branch a slow
+            # query service escapes as a traceback rather than as a failure the
+            # caller can decide about.
+            error = exc
+            if attempt < 3:
+                wait = 2.0 * attempt
+                print(f"  no answer in time, retrying in {wait}s",
+                      file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise WikidataError(f"{url} did not answer in time: {exc}") from None
     raise WikidataError(f"giving up on {url}: {error}")
 
 

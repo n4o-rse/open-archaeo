@@ -8,6 +8,7 @@ Standard library only, like the rest of the package -- no `requests`, no
 the Action API.
 
 ```
+all        →  everything below, then a browser        one command for a whole session
 check      →  nothing                                verify the whole route
 preview    →  docs/preview.html                      every item, as Wikidata shows it, with its problems
 site       →  docs/index.html                        the landing page that links them
@@ -32,6 +33,37 @@ to undo, and a default cannot be forgotten.
 ## Start here
 
 ```bash
+python py/wikidata/main.py all
+```
+
+`all` runs the read-only route in order -- rebuild the table, collect the
+controlled values, build the subject worksheet, check, preview, publish the
+query and landing pages -- and then opens `docs/preview.html` in a browser.
+
+Two steps are left out. `push`, at any setting: writing to Wikidata is a
+decision, and a step named *all* is the wrong place to keep one. And
+`reconcile`, because it is the slow one -- several rounds of batched queries
+against a service that answers when it answers -- while its result, the
+concordance, changes far less often than the pages built from it. `--reconcile`
+puts it back in, before `check`, so the plan has a concordance to report on.
+
+A step that needs Wikidata and does not get an answer is reported and skipped;
+the run carries on, because everything after it builds from what is on disk.
+
+| Flag | Effect |
+|---|---|
+| `--reconcile` | Also run `reconcile`. |
+| `--offline` | Skip every step that needs a connection. The preview is still built, with whatever labels are already cached. |
+| `--no-open` | Build everything, open nothing. |
+| `--full` | Use all 416 entries instead of the slice, preview included. |
+| `--out FILE` | Write the preview somewhere other than `docs/preview.html`. |
+| `--out-dir DIR`, `--csv PATH`, `--slice FILE`, `--all-categories` | As for the individual steps. |
+
+A step that fails for any other reason stops the run.
+
+## One step at a time
+
+```bash
 python py/wikidata/main.py
 ```
 
@@ -48,8 +80,8 @@ credentials. A first run is expected to be all warnings.
 
 What `check` actually verifies against Wikidata:
 
-- The two obligatory Q-ids exist, and it prints their labels so you can see
-  they are what you meant.
+- Every Q-id in the identity block exists, and it prints their labels so you
+  can see they are what you meant.
 - Every property the model uses exists **and still has the datatype the model
   assumes**. A `P1324` that stopped being a url would otherwise fail one row at
   a time.
@@ -71,7 +103,9 @@ What `check` actually verifies against Wikidata:
 | `check.py` | The preflight. |
 | `queries.py` | The example queries, as source. |
 | `sparql.py` | Renders the query page from them. |
+| `labels.py` | The Q-id label cache: read offline, refreshed by anything that talks to Wikidata. |
 | `vocabulary.json` | Generated: the registry itself, mostly `null` until filled in. |
+| `labels.json` | Generated: English labels for the Q-ids used, so the preview reads as words offline. |
 | `config.example.ini` | Copy to `config.ini`. Only `push --live` reads it. |
 
 | `landing.py` | Writes `docs/index.html`. Named `landing` because `site` is a standard-library module. |
@@ -80,6 +114,11 @@ What `check` actually verifies against Wikidata:
 and once in prose. If you change one, change the other.
 
 ## Steps and flags
+
+### `all`
+
+Runs the steps below in order and opens the preview. See *Start here* above for
+its flags.
 
 ### `check`
 
@@ -109,6 +148,13 @@ would produce, rendered the way Wikidata displays them -- property label and
 number on the left, value on the right, qualifiers indented under the statement
 they belong to.
 
+Item values read as words in the same way, out of `labels.json`. That cache is
+filled by any step that contacts Wikidata anyway -- `check` reads the identity
+block's labels to report them, and keeps them -- so after one online run the
+page names its Q-ids even when built with no connection at all. A Q-id that has
+never been looked up renders as itself: nothing here invents a label for a page
+whose purpose is to show exactly what would be written.
+
 It shows the whole set rather than a sample, because it is a test of the
 mapping and a mapping is tested against all of the data. The filter bar is how
 you get to the interesting part: by category, by whether the item has problems,
@@ -135,7 +181,7 @@ modelling decisions below are explained.
 | Flag | Effect |
 |---|---|
 | `--size N` | Show only N items, one per modelling case first. Default 0, meaning all. |
-| `--labels` | Read English labels for the Q-ids used. Read-only; without it the page contacts nothing. |
+| `--labels` | Re-read the labels from Wikidata and refresh `labels.json`. Without it, cached labels are used and the page contacts nothing. |
 | `--out FILE` | Write somewhere else. |
 | `--slice FILE`, `--concordance FILE`, `--out-dir DIR`, `--vocabulary FILE` | As above. |
 
@@ -158,13 +204,29 @@ columns saying whether the entry is in Wikidata and how it was found.
 | `match_property` | `P1324`, `P356`, `P5565`, `P5568`, or `manual`. |
 | `match_value` | The exact value that matched, so a wrong match is visible. |
 | `wikidata_label` | The item's label, for eyeballing false positives. |
-| `is_chublet` | Whether it already carries **both** obligatory statements. |
+| `is_chublet` | Whether it already carries the whole identity block. |
 | `checked` | Date of the lookup. |
 
-Four keys are tried, in decreasing order of confidence: repository URL, DOI,
-CRAN package, PyPI package. Repository URLs are queried in several spellings,
-because Wikidata holds whatever the editor pasted -- with and without a
-trailing slash, with and without `.git`, occasionally over http.
+Six keys are tried, in decreasing order of confidence. The first two are the
+identity block read back: `P2888` holding the entry URL, and `P217` holding the
+slug inside collection `Q141190255`. An item carrying either *is* this entry,
+so they run before anything that has to be inferred. The other four look
+outward: repository URL, DOI, CRAN package, PyPI package. Repository URLs are
+queried in several spellings, because Wikidata holds whatever the editor pasted
+-- with and without a trailing slash, with and without `.git`, occasionally
+over http.
+
+The slug lookup asks for `P217` *and* its `P195` qualifier in one pattern. An
+inventory number read without its register is a string with no referent, and
+matching on it alone would accept a museum object numbered `tabula`. It walks
+statement nodes rather than truthy triples, which costs the query service more
+per value, so it goes in batches of fifty rather than a hundred.
+
+**Both identity keys are empty until the first push.** Nothing carries `P2888`
+or `P217` in this collection before this import puts it there, so on a first
+run they are two round trips that find nothing. They earn their place afterwards:
+once items are written, they are the only keys that identify an entry rather
+than infer it, and they are what makes a second run recognise its own work.
 
 **Names are deliberately not a key.** `item_name` is not unique in open-archaeo
 -- that is why `unique_slug()` exists -- so matching on it would manufacture
@@ -301,11 +363,12 @@ Two things it will not assert:
 | `--strict` | With `--verify`, fail the build on a failing query. |
 
 `queries.py` is the source; the step writes `docs/sparql.html` and
-`docs/queries/*.rq` from it, so the two cannot drift apart. Eight queries, of
+`docs/queries/*.rq` from it, so the two cannot drift apart. Nine queries, of
 which three are worklists rather than reports -- entries with a repository but
 no licence, repository statements missing the required `P8423` qualifier, and
-items carrying only one of the two obligatory statements. For those, an empty
-result is the healthy one.
+items whose identity block is incomplete. For those, an empty result is the
+healthy one. One more answers the identifying question -- *which item is this
+open-archaeo entry* -- from the slug.
 
 Two deviations from the query pages in the `wdt-*` repositories, both
 deliberate:
@@ -340,7 +403,20 @@ Writes `docs/index.html`, a landing page linking the two generated pages and
 the two documents. It marks anything not generated yet, so an incomplete
 `docs/` says so rather than offering dead links.
 
-## Two modelling decisions
+## Three modelling decisions
+
+**The identity block.** Six statements go on every item whatever the row
+contains: `P31` the chublet class, `P6104` the WikiProject, `P361` part of
+open-archaeo and of chublets.software, `P195` open-archaeo as the collection,
+`P217` the slug as inventory number qualified by that collection, and `P2888`
+the entry URL. The first four say which set the item belongs to; the last two
+say which entry it is, and that is a different question -- without them the
+import cannot be checked row by row against its source, only counted.
+
+They live in `IDENTITY_STATEMENTS` and `slug_claims()` in `model.py`, and every
+other module reads them from there: the preflight resolves those Q-ids, the
+preview labels them, `reconcile` builds its "already a chublet" query out of
+them. Adding a seventh statement is one edit.
 
 **Exact match rather than described at URL.** The open-archaeo entry is not a
 page that mentions the tool; it is a record *of* the tool. `P2888` exact match
@@ -368,6 +444,8 @@ anyway is a judgement about how the data will be queried, which is why it is a
 vocabulary entry rather than a hard-coded statement.
 
 ## A first session
+
+`all` does this in one command. Spelled out, so that each step is inspectable:
 
 ```bash
 python py/wikidata/main.py --offline        # does the data still transform?
