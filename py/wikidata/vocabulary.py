@@ -110,6 +110,7 @@ def resolve(vocabulary: dict, assignments: list[list[str]]) -> int:
     data actually contains, and the Q-id has to look like one.
     """
     applied = 0
+    assigned: list[str] = []
     for section, value, qid in assignments:
         if section not in vocabulary:
             print(f"  no such section: {section} -- try one of "
@@ -130,8 +131,26 @@ def resolve(vocabulary: dict, assignments: list[list[str]]) -> int:
         vocabulary[section][value] = qid
         note = f" (was {previous})" if previous and previous != qid else ""
         print(f"  {section}/{value} = {qid}{note}", file=sys.stderr)
+        assigned.append(qid)
         applied += 1
+
+    # A Q-id that was just chosen is one the preview will want to spell out, so
+    # its label is fetched here rather than left for a later --labels run. This
+    # is the whole reason a value can be set and still render as a number.
+    if assigned:
+        cache_labels(assigned)
     return applied
+
+
+def cache_labels(qids: list[str]) -> None:
+    """Read labels for these Q-ids into labels.json. Silent when offline."""
+    try:
+        import labels as label_cache
+
+        label_cache.resolve(qids, fetch=True)
+    except Exception as error:  # network, or no cache module: not worth failing
+        print(f"  labels not cached ({error}); run 'preview --labels' later",
+              file=sys.stderr)
 
 
 def load(path: Path = DEFAULT_PATH) -> dict:

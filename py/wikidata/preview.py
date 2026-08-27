@@ -270,6 +270,9 @@ a:hover { text-decoration: underline; }
            background: #f8f9fa; border: 1px solid #eaecf0; padding: 7px 9px;
            margin-top: 14px; color: #54595d; word-break: break-all; }
 .cases { margin-top: 8px; }
+.source { display: block; margin-top: 3px; font-family: ui-monospace, Menlo, monospace;
+          font-size: 10.5px; color: #72777d; }
+.source .from { color: #a2a9b1; }
 .hidden { display: none; }
 """
 
@@ -307,6 +310,21 @@ def _property(pid: str, *, qualifier: bool = False) -> str:
             f'<span class="prop-id">{pid}</span>')
 
 
+def _source(claim, *, qualifier: bool = False) -> str:
+    """The provenance line under a value: which column of which file it came from.
+
+    A reviewer checking a statement against open-archaeo should not have to read
+    the mapping to find out where it came from, and "from category: Scripts" in
+    a note only says which value, not which column. This says both, plus the
+    registry entry when the value had to be resolved to a Q-id.
+    """
+    if not claim.source:
+        return ""
+    text = html.escape(claim.source).replace(
+        " -&gt; ", ' <span class="from">-&gt;</span> ')
+    return f'<span class="source">{text}</span>'
+
+
 def render_claim(claim, labels: dict[str, str]) -> str:
     badge = ""
     if claim.note.startswith("obligatory"):
@@ -320,14 +338,14 @@ def render_claim(claim, labels: dict[str, str]) -> str:
         rows = "".join(
             f'<div class="qualifier-row">'
             f'<div class="qual-prop">{_property(q.prop, qualifier=True)}</div>'
-            f'<div>{_value(q, labels, qualifier=True)}</div></div>'
+            f'<div>{_value(q, labels, qualifier=True)}{_source(q)}</div></div>'
             for q in claim.qualifiers)
         qualifiers = f'<div class="qualifiers">{rows}</div>'
 
     return (f'<div class="statement-row">'
             f'<div class="prop-cell">{_property(claim.prop)}</div>'
             f'<div class="value-cell">{_value(claim, labels)}{badge}'
-            f'{qualifiers}</div></div>')
+            f'{_source(claim)}{qualifiers}</div></div>')
 
 
 ISSUE_BLOCKS = (
@@ -665,10 +683,15 @@ def run(*, slice_path: Path, vocabulary: dict, concordance: Path,
 
     if with_labels:
         print("  reading labels from Wikidata", file=sys.stderr)
-    labels = fetch_labels(collect_item_values(plans), fetch=with_labels)
-    if not labels:
-        print("  no labels known yet -- run 'check' or 'preview --labels' "
-              "once with a connection", file=sys.stderr)
+    wanted = collect_item_values(plans)
+    labels = fetch_labels(wanted, fetch=with_labels)
+    missing = sorted(wanted - set(labels))
+    if missing:
+        print(f"  {len(missing)} of {len(wanted)} Q-ids have no cached label: "
+              + ", ".join(missing[:6]) + (" …" if len(missing) > 6 else ""),
+              file=sys.stderr)
+        print("  run 'preview --labels' once with a connection to fill them in",
+              file=sys.stderr)
 
     sections = [s for s in vocabulary if not s.startswith("_")]
     values = [v for s in sections for v in vocabulary[s].values()]

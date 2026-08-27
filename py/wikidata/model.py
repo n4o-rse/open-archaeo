@@ -186,18 +186,44 @@ FORMATTER_URLS = {
 }
 
 
+# Where the parts of a statement come from. The table is the transformed CSV,
+# the registry is vocabulary.json, and a few statements come from neither --
+# they are decisions written into this file. Naming the source per statement is
+# what lets a reviewer check one against the register without reading the code.
+SRC_TABLE = "open-archaeo-software.csv"
+SRC_VOCABULARY = "vocabulary.json"
+SRC_MODEL = "model.py"
+
+
+def from_column(*columns: str) -> str:
+    """Source string for a value taken straight from the table."""
+    return f"{SRC_TABLE}: {', '.join(columns)}"
+
+
+def from_vocabulary(section: str, value: str, *columns: str) -> str:
+    """Source string for a value resolved through the controlled vocabulary.
+
+    With no column, the value is not in the register at all -- it is a decision
+    recorded in the vocabulary, like the superclass every item carries.
+    """
+    registry = f"{SRC_VOCABULARY}: {section}/{value}"
+    return f"{from_column(*columns)} -> {registry}" if columns else registry
+
+
 class Claim:
     """One statement plus its qualifiers, independent of how it is written."""
 
-    __slots__ = ("prop", "value", "datatype", "qualifiers", "note")
+    __slots__ = ("prop", "value", "datatype", "qualifiers", "note", "source")
 
     def __init__(self, prop: str, value, datatype: str = "item",
-                 qualifiers: list | None = None, note: str = "") -> None:
+                 qualifiers: list | None = None, note: str = "",
+                 source: str = "") -> None:
         self.prop = prop
         self.value = value
         self.datatype = datatype
         self.qualifiers = qualifiers or []
         self.note = note
+        self.source = source
 
     def __repr__(self) -> str:
         tail = "".join(f"  [{q.prop}={q.value}]" for q in self.qualifiers)
@@ -466,10 +492,13 @@ def slug_claims(slug: str) -> list[Claim]:
         return []
     return [
         Claim(P_EXACT_MATCH, post_url(slug), "url",
-              note="obligatory: the open-archaeo entry, same thing"),
+              note="obligatory: the open-archaeo entry, same thing",
+              source=from_column("slug") + " -> post_url()"),
         Claim(P_INVENTORY_NUMBER, slug, "string",
-              qualifiers=[Claim(P_COLLECTION, OPEN_ARCHAEO)],
-              note="obligatory: open-archaeo slug"),
+              qualifiers=[Claim(P_COLLECTION, OPEN_ARCHAEO,
+                                source=f"{SRC_MODEL}: OPEN_ARCHAEO")],
+              note="obligatory: open-archaeo slug",
+              source=from_column("slug")),
     ]
 
 
@@ -496,7 +525,8 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
     # software it is, which is what the category column knows and the class
     # alone does not.
     for prop, qid, why in IDENTITY_STATEMENTS:
-        claims.append(Claim(prop, qid, note=f"obligatory: {why}"))
+        claims.append(Claim(prop, qid, note=f"obligatory: {why}",
+                            source=f"{SRC_MODEL}: IDENTITY_STATEMENTS"))
     if row.get("slug"):
         claims.extend(slug_claims(row["slug"]))
     else:
@@ -505,16 +535,20 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
     for label in SUPERCLASSES:
         qid = vocabulary.get("superclass", {}).get(label)
         if qid:
-            claims.append(Claim(P_INSTANCE_OF, qid, note=f"every item: {label}"))
+            claims.append(Claim(P_INSTANCE_OF, qid, note=f"every item: {label}",
+                                source=from_vocabulary("superclass", label)))
     category_qid = vocabulary.get("item_class", {}).get(row["category"])
     if category_qid:
-        claims.append(Claim(P_INSTANCE_OF, category_qid,
-                            note=f"from category: {row['category']}"))
+        claims.append(Claim(
+            P_INSTANCE_OF, category_qid,
+            note=f"from category: {row['category']}",
+            source=from_vocabulary("item_class", row["category"], "category")))
     else:
         raise_issue("unresolved-class", row["category"])
 
     if row["name"]:
-        claims.append(Claim(P_NAME, row["name"], "monolingual@en"))
+        claims.append(Claim(P_NAME, row["name"], "monolingual@en",
+                            source=from_column("name")))
 
     # -- code --------------------------------------------------------------
     repos = [u for u in row["repository"].split("|") if u]
@@ -528,23 +562,31 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
         vcs_label = FORGE_VCS.get(host, "")
         vcs_qid = vocabulary.get("version_control_system", {}).get(vcs_label)
         if vcs_qid:
-            qualifiers.append(Claim(P_VERSION_CONTROL, vcs_qid))
+            qualifiers.append(Claim(
+                P_VERSION_CONTROL, vcs_qid,
+                source=from_vocabulary("version_control_system", vcs_label,
+                                       "repository_host")))
         else:
             raise_issue("no-vcs-qualifier", host or "unknown forge")
         archive = match_archive(url, archives)
         if archive:
-            qualifiers.append(Claim(P_ARCHIVE_URL, archive, "url"))
+            qualifiers.append(Claim(P_ARCHIVE_URL, archive, "url",
+                                    source=from_column("internetarchive")))
             snapshot = archive_date(archive)
             if snapshot:
-                qualifiers.append(Claim(P_ARCHIVE_DATE, snapshot, "time"))
+                qualifiers.append(Claim(
+                    P_ARCHIVE_DATE, snapshot, "time",
+                    source=from_column("internetarchive") + " -> path"))
         elif archives and index == 0:
             raise_issue("archive-mismatch", archives[0])
-        claims.append(Claim(P_REPOSITORY, url, "url", qualifiers))
+        claims.append(Claim(P_REPOSITORY, url, "url", qualifiers,
+                            source=from_column("repository")))
         if index == 0:
             raise_issue("no-licence")
 
     if row["website"]:
-        claims.append(Claim(P_OFFICIAL_WEBSITE, row["website"], "url"))
+        claims.append(Claim(P_OFFICIAL_WEBSITE, row["website"], "url",
+                            source=from_column("website")))
 
     # -- registries and identifiers ---------------------------------------
     # registry and registry_name are parallel columns, so they are zipped
@@ -556,26 +598,35 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
         prop, pattern = REGISTRY_PROPERTY[registry]
         name = package_name(url, pattern)
         if name:
-            claims.append(Claim(prop, name, "external-id"))
+            claims.append(Claim(
+                prop, name, "external-id",
+                source=from_column("registry", "registry_name") + " -> package name"))
 
     if row["doi"]:
         if row["doi"].startswith("10.5281/"):
             raise_issue("zenodo-doi", row["doi"])
         else:
-            claims.append(Claim(P_DOI, row["doi"].upper(), "external-id"))
+            claims.append(Claim(P_DOI, row["doi"].upper(), "external-id",
+                                source=from_column("doi")))
 
     # -- what it is about --------------------------------------------------
     role, platform = row["platform_role"], row["platform"]
     if platform and role == "language":
         qid = vocabulary.get("programming_language", {}).get(platform)
         if qid:
-            claims.append(Claim(P_PROGRAMMED_IN, qid))
+            claims.append(Claim(P_PROGRAMMED_IN, qid,
+                                source=from_vocabulary(
+                                    "programming_language", platform,
+                                    "platform", "platform_role")))
         else:
             raise_issue("unresolved-language", platform)
     elif platform and role == "host application":
         qid = vocabulary.get("host_application", {}).get(platform)
         if qid:
-            claims.append(Claim(P_DEPENDS_ON, qid))
+            claims.append(Claim(P_DEPENDS_ON, qid,
+                                source=from_vocabulary(
+                                    "host_application", platform,
+                                    "platform", "platform_role")))
         else:
             raise_issue("unresolved-host", platform)
 
@@ -587,7 +638,10 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
     for tag in [t for t in row["tags"].split("|") if t]:
         qid = vocabulary.get("tag", {}).get(tag)
         if qid:
-            claims.append(Claim(P_MAIN_SUBJECT, qid, note=f"tag: {tag}"))
+            claims.append(Claim(
+                P_MAIN_SUBJECT, qid, note=f"tag: {tag}",
+                source=from_vocabulary("tag", tag, "tags")
+                       + " (worksheet: out/tag-reconciliation.csv)"))
         else:
             raise_issue("unresolved-tag", tag)
 
@@ -601,7 +655,8 @@ def build_claims(row: dict, vocabulary: dict) -> tuple[list[Claim], list[Issue]]
         for url in [u for u in row.get(column, "").split("|") if u]:
             if column == "publication" and url.startswith("10."):
                 continue  # a bare DOI, not a URL
-            claims.append(Claim(P_DESCRIBED_AT_URL, url, "url", note=what))
+            claims.append(Claim(P_DESCRIBED_AT_URL, url, "url", note=what,
+                                source=from_column(column)))
 
     if row["description"][:1].isupper() or row["description"].endswith("."):
         raise_issue("description-style", row["description"][:80])

@@ -148,10 +148,23 @@ would produce, rendered the way Wikidata displays them -- property label and
 number on the left, value on the right, qualifiers indented under the statement
 they belong to.
 
+**Every statement says where it came from.** Under each value there is a line
+naming the column of `out/open-archaeo-software.csv` it was read from, and,
+where the value had to be resolved to a Q-id, the `vocabulary.json` entry that
+did it -- `open-archaeo-software.csv: repository_host -> vocabulary.json:
+version_control_system/Git`. Statements that are in no column say so instead:
+`model.py: IDENTITY_STATEMENTS` for the obligatory block. The note badge says
+*which value* a statement came from; this says *which column of which file*,
+which is what a reviewer checking one against the register actually needs.
+
 Item values read as words in the same way, out of `labels.json`. That cache is
-filled by any step that contacts Wikidata anyway -- `check` reads the identity
-block's labels to report them, and keeps them -- so after one online run the
-page names its Q-ids even when built with no connection at all. A Q-id that has
+filled by any step that contacts Wikidata anyway: `check` reads the identity
+block's labels to report them, `categories --verify` reads the class labels,
+and `vocab --set` and `categories --apply` look up whatever Q-id was just
+chosen. So a value that is resolved is a value that has a label from the next
+build onwards, and after one online run the page names its Q-ids with no
+connection at all. When some are still missing, `preview` says how many and
+which, rather than quietly rendering numbers. A Q-id that has
 never been looked up renders as itself: nothing here invents a label for a page
 whose purpose is to show exactly what would be written.
 

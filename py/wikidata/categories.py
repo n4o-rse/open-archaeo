@@ -186,6 +186,7 @@ def apply_worksheet(worksheet: Path, vocabulary_path: Path) -> int:
     vocabulary = json.loads(vocabulary_path.read_text(encoding="utf-8"))
 
     applied = deferred = unknown = 0
+    assigned: list[str] = []
     for row in rows:
         qid = row.get("qid", "").strip()
         if not qid:
@@ -208,11 +209,16 @@ def apply_worksheet(worksheet: Path, vocabulary_path: Path) -> int:
             unknown += 1
             continue
         target[row["value"]] = qid
+        assigned.append(qid)
         applied += 1
 
     vocabulary_path.write_text(
         json.dumps(vocabulary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8")
+    if assigned:
+        import vocabulary as vocabulary_module
+
+        vocabulary_module.cache_labels(assigned)
     print(f"{applied} values resolved, {deferred} recorded for later, "
           f"{unknown} unknown -> {vocabulary_path}", file=sys.stderr)
     return applied
@@ -273,6 +279,7 @@ GROUP BY ?class"""):
     }
 
     doubtful = 0
+    found: dict[str, str] = {}
     for row in filled:
         qid = row["qid"].strip()
         entity = entities.get(qid, {})
@@ -316,6 +323,10 @@ GROUP BY ?class"""):
         else:
             print("  ok")
 
+    # The labels are already read; keeping them saves the preview a lookup.
+    import labels as label_cache
+
+    label_cache.update(found)
     print(f"\n{len(filled)} filled, {doubtful} worth a second look",
           file=sys.stderr)
     return doubtful
