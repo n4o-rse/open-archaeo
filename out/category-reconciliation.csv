@@ -1,9 +1,9 @@
-"section","value","kind","uses_software","uses_all","examples","search_term","qid","qid_label","note"
-"item_class","Packages and libraries","software",248,248,"14C-power-sensitivity; 3D-survey-collection; 3D_EdgeAngle","software library","Q188860",,
-"item_class","Standalone software","software",94,94,"ABMA_tutorials; AIS; Alligator","application software","Q166142",,
-"item_class","Scripts","software",74,74,"3D-ORGAN; 3d_spatial_ripley_analyses; Al2O3_AnalysisApp","script","Q1070421",,
-"item_class","Lists and datasets","other",0,84,"3D libraries of ships; 3d-ceramics; A bibliography of public archaeology and archaeological heritage management in the Mediterranean","data set","Q1172284",,
-"item_class","Guides","other",0,33,"A Mobile Data-Collection Workflow for Archaeologists; a-scientific-computing-environment-for-archaeology.txt; ABMA","guide","Q1057179",,
-"item_class","Products","other",0,15,"archaeology-grand-challenges.r; archaeology_on_wikipedia.R; ArchaeologyAdventure","product","Q542929",,
-"item_class","Specifications, protocols and schemas","other",0,14,"Archaeo-Term; archeo-bertje; archvocab","specification","Q317623",,
-"superclass","research software","every item",416,562,,"research software","Q95001953",,
+section,value,kind,uses_software,uses_all,examples,search_term,qid,qid_label,note
+item_class,Packages and libraries,software,248,248,14C-power-sensitivity; 3D-survey-collection; 3D_EdgeAngle,software library,Q188860,,Code meant to be called by other code. The natural reading is a software library rather than a distribution format -- an R package on CRAN is a library that happens to ship as a package.
+item_class,Standalone software,software,94,94,ABMA_tutorials; AIS; Alligator,application software,Q166142,,Runs on its own. Application software is the usual item; note that some entries here are extensions of a host application and are better described by P1547 than by this class.
+item_class,Scripts,software,74,74,3D-ORGAN; 3d_spatial_ripley_analyses; Al2O3_AnalysisApp,script,Q1070421,,"A single file or small set of them, run rather than installed. Whether Wikidata has an item that means this and not 'script' in the writing-system sense is the thing to check."
+item_class,Lists and datasets,other,0,84,3D libraries of ships; 3d-ceramics; A bibliography of public archaeology and archaeological heritage management in the Mediterranean,data set,Q1172284,,Not imported yet. Decided here so the term keeps one item.
+item_class,Guides,other,0,33,A Mobile Data-Collection Workflow for Archaeologists; a-scientific-computing-environment-for-archaeology.txt; ABMA,guide,Q1057179,,Not imported yet. Documentation rather than software.
+item_class,Products,other,0,15,archaeology-grand-challenges.r; archaeology_on_wikipedia.R; ArchaeologyAdventure,product,Q542929,,Not imported yet. Ambiguous in the register itself.
+item_class,"Specifications, protocols and schemas",other,0,14,Archaeo-Term; archeo-bertje; archvocab,specification,Q317623,,Not imported yet.
+superclass,research software,every item,416,562,,research software,Q95001953,,"Q141115627 is documented as a subclass of Q73899440. If that P279 holds, stating it on every item too is redundant for queries written wdt:P31/wdt:P279*. Leave the qid empty to state only the chublet class; fill it to state both."
