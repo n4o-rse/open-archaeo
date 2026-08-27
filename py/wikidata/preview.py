@@ -270,9 +270,14 @@ a:hover { text-decoration: underline; }
            background: #f8f9fa; border: 1px solid #eaecf0; padding: 7px 9px;
            margin-top: 14px; color: #54595d; word-break: break-all; }
 .cases { margin-top: 8px; }
-.source { display: block; margin-top: 3px; font-family: ui-monospace, Menlo, monospace;
-          font-size: 10.5px; color: #72777d; }
-.source .from { color: #a2a9b1; }
+.source { display: block; margin-top: 4px; }
+.badge-source { background: #f1f3f6; color: #54595d; margin: 0 3px 0 0;
+                font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+                border: 1px solid #e4e7ec; }
+.badge-source b { font-weight: normal; color: #202122; }
+.badge-registry { background: #eef6ec; color: #43663c; border-color: #dceada; }
+.badge-decision { background: #fbf3e2; color: #7a5c1e; border-color: #f0e4c8; }
+.source .arrow { color: #a2a9b1; font-size: 10px; margin-right: 3px; }
 .hidden { display: none; }
 """
 
@@ -310,19 +315,47 @@ def _property(pid: str, *, qualifier: bool = False) -> str:
             f'<span class="prop-id">{pid}</span>')
 
 
+# Which chip a source part gets. The colour carries the same distinction the
+# text does: a value read from the register, a value resolved through the
+# controlled vocabulary, and a value in neither because it was decided in the
+# code. A reviewer scanning the page should see which is which without reading
+# the strings.
+SOURCE_STYLES = (
+    ("vocabulary.json", "badge-registry"),
+    ("model.py", "badge-decision"),
+)
+
+
+def _source_chip(part: str) -> str:
+    """One part of a provenance trail, as a chip.
+
+    Before the colon is the file, after it the column or entry inside it, so
+    the second half is emphasised: the file is context, the column is answer.
+    """
+    style = next((css for prefix, css in SOURCE_STYLES
+                  if part.startswith(prefix)), "")
+    where, _, what = part.partition(": ")
+    inner = (f"{html.escape(where)}: <b>{html.escape(what)}</b>" if what
+             else html.escape(where))
+    return f'<span class="badge badge-source {style}">{inner}</span>'
+
+
 def _source(claim, *, qualifier: bool = False) -> str:
-    """The provenance line under a value: which column of which file it came from.
+    """The provenance under a value: which column of which file it came from.
 
     A reviewer checking a statement against open-archaeo should not have to read
     the mapping to find out where it came from, and "from category: Scripts" in
-    a note only says which value, not which column. This says both, plus the
-    registry entry when the value had to be resolved to a Q-id.
+    a note only says which value, not which column. This says both, and shows a
+    resolved value as two chips -- the column it was read from and the registry
+    entry that turned it into a Q-id -- because those are two separate places a
+    wrong statement can come from.
     """
     if not claim.source:
         return ""
-    text = html.escape(claim.source).replace(
-        " -&gt; ", ' <span class="from">-&gt;</span> ')
-    return f'<span class="source">{text}</span>'
+    parts = [part.strip() for part in claim.source.split("->")]
+    chips = '<span class="arrow">&rarr;</span>'.join(
+        _source_chip(part) for part in parts)
+    return f'<span class="source">{chips}</span>'
 
 
 def render_claim(claim, labels: dict[str, str]) -> str:

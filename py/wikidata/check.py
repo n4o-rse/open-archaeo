@@ -127,6 +127,40 @@ def check_entities(report: Report) -> None:
     label_cache.update(found)
 
 
+def check_labels(report: Report, vocab: dict | None) -> None:
+    """Every resolved Q-id should have a cached label, so pages read as words.
+
+    The identity block is handled above. What is left is whatever has been
+    resolved in vocabulary.json since the last online run -- a Q-id set with
+    'vocab --set' months ago has no reason to be in the cache, and a preview
+    built offline then shows a bare number. This is the step that notices.
+    """
+    report.section("Labels")
+    if vocab is None:
+        report.line(WARN, "no vocabulary, so nothing to look up")
+        return
+    resolved = {qid for section, values in vocab.items()
+                if not section.startswith("_") and isinstance(values, dict)
+                for qid in values.values() if qid}
+    if not resolved:
+        report.line(OK, "no controlled value resolved yet")
+        return
+    cached = label_cache.load()
+    missing = sorted(resolved - set(cached))
+    if not missing:
+        report.line(OK, f"{len(resolved)} resolved values, all named")
+        return
+    fresh = label_cache.resolve(missing, fetch=True)
+    if fresh:
+        report.line(OK, f"{len(fresh)} label(s) read and cached: "
+                        + ", ".join(f"{q} {fresh[q]}" for q in sorted(fresh)[:5]))
+    still = sorted(set(missing) - set(fresh))
+    if still:
+        report.line(WARN, f"{len(still)} resolved value(s) still unnamed, so "
+                          "the preview shows numbers for them: "
+                          + ", ".join(still[:5]))
+
+
 def check_properties(report: Report) -> None:
     """Every property used must exist and still have the datatype assumed."""
     report.section("Properties and datatypes")
@@ -314,6 +348,8 @@ def run(*, rows: list[dict], concordance_path: Path, vocabulary_path: Path,
 
     concordance = check_concordance(report, concordance_path)
     vocab = check_vocabulary(report, vocabulary_path)
+    if not offline:
+        check_labels(report, vocab)
     check_plan(report, concordance, vocab)
     check_credentials(report, config_path, do_login=do_login and not offline)
 

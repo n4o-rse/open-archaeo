@@ -87,6 +87,11 @@ What `check` actually verifies against Wikidata:
   a time.
 - Duplicate Q-ids in the concordance -- two entries claiming the same item is a
   reconciliation error, and the only check here that fails rather than warns.
+- That every Q-id resolved in `vocabulary.json` has a cached English label, and
+  it reads and caches the ones that do not. This is the step that notices a
+  value set with `vocab --set` long after the cache was last filled -- the case
+  where a preview built offline shows a bare number for a value that was
+  decided months ago.
 
 ## Files
 
@@ -127,6 +132,7 @@ Verifies everything and writes nothing.
 | Flag | Effect |
 |---|---|
 | `--offline` | Skip every network check. Data and plan only -- useful on a train, and the only mode that works without a connection. |
+| | *(Without it, `check` also caches a label for every Q-id resolved since the last online run.)* |
 | `--login` | Also authenticate and report the account's rights. Obtains a CSRF token; **makes no edit**. |
 | `--csv PATH` | Read a different copy of `open-archaeo.csv`. |
 | `--all-categories` | Check all 562 entries instead of the 416-entry software subset. |
@@ -148,14 +154,15 @@ would produce, rendered the way Wikidata displays them -- property label and
 number on the left, value on the right, qualifiers indented under the statement
 they belong to.
 
-**Every statement says where it came from.** Under each value there is a line
-naming the column of `out/open-archaeo-software.csv` it was read from, and,
-where the value had to be resolved to a Q-id, the `vocabulary.json` entry that
-did it -- `open-archaeo-software.csv: repository_host -> vocabulary.json:
-version_control_system/Git`. Statements that are in no column say so instead:
-`model.py: IDENTITY_STATEMENTS` for the obligatory block. The note badge says
-*which value* a statement came from; this says *which column of which file*,
-which is what a reviewer checking one against the register actually needs.
+**Every statement says where it came from**, in chips under the value, and the
+colour is the distinction: grey for a column of `out/open-archaeo-software.csv`,
+green for a `vocabulary.json` entry, amber for something decided in `model.py`
+and present in no column at all. A value that had to be resolved shows two chips
+with an arrow between them -- the column it was read from, then the registry
+entry that turned it into a Q-id -- because those are two separate places a
+wrong statement can come from. The note badge says *which value* a statement
+came from; the chips say *which column of which file*, which is what checking
+one against the register actually needs.
 
 Item values read as words in the same way, out of `labels.json`. That cache is
 filled by any step that contacts Wikidata anyway: `check` reads the identity
